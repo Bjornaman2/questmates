@@ -127,6 +127,7 @@ function Doc:text(y, text, font, x, w, r, g, b)
     return f
   end)
   W.font(fs, font or "GameFontHighlightSmall")
+  fs:SetWordWrap(true)
   fs:ClearAllPoints()
   x = x or 10
   fs:SetPoint("TOPLEFT", self.parent, "TOPLEFT", x, y)
@@ -207,6 +208,30 @@ function Doc:action(text, y, fn, width, tip)
   b.tip = tip
   b:ClearAllPoints()
   b:SetPoint("TOPRIGHT", self.parent, "TOPRIGHT", -10, y)
+  return b
+end
+
+-- A small underlined-looking text link (secondary actions).
+function Doc:link(text, x, y, fn, tip)
+  local b = self:get("link", function(parent)
+    local btn = CreateFrame("Button", nil, parent)
+    btn.text = W.text(btn, "OVERLAY", "GameFontNormalSmall")
+    btn.text:SetPoint("LEFT")
+    btn:SetScript("OnEnter", function(s)
+      s.text:SetTextColor(1, 1, 1)
+      if s.tip then GameTooltip:SetOwner(s, "ANCHOR_TOP"); GameTooltip:SetText(s.tip, 1, 1, 1, 1, true); GameTooltip:Show() end
+    end)
+    btn:SetScript("OnLeave", function(s) s.text:SetTextColor(1, 0.82, 0); GameTooltip:Hide() end)
+    return btn
+  end)
+  b.text:SetText(text)
+  b.text:SetTextColor(1, 0.82, 0)
+  b:SetSize(b.text:GetStringWidth() + 4, 16)
+  b:ClearAllPoints()
+  b:SetPoint("TOPLEFT", self.parent, "TOPLEFT", x, y)
+  b:SetScript("OnClick", fn)
+  b.tip = tip
+  b:SetFrameLevel(self.parent:GetFrameLevel() + 5)
   return b
 end
 

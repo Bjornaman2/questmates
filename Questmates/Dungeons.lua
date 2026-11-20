@@ -510,136 +510,134 @@ function D.renderList(d, J)
   return y
 end
 
--- The "what to do next" box for the party's dungeon.
+-- "Do this next": one sentence, one button. Used on the dungeon page, the dungeon list and the Start page.
 function D.renderTaskBox(d, y, dg)
   local a, p = D.nextAction(dg)
   local top = y
-  local box = d:card(top, 62, nil, { 1, 0.82, 0.2 })
+  local h = 78
+  local box = d:card(top, h, nil, { 1, 0.82, 0.2 })
   box:EnableMouse(false)
-  d:text(top - 6, C.gold .. "Getting ready for " .. dg.name .. "|r" .. C.grey .. "   " .. p.ready .. " of " .. p.total .. " quests|r", "GameFontNormal", 16, d.w - 150)
-  local line, btn
-  if a.kind == "finish" then
-    line = "First finish " .. C.gold .. (QM.titleOf(a.qid) or "?") .. "|r (it's in your log) - it unlocks " .. C.gold .. (QM.titleOf(a.forQuest) or "a dungeon quest") .. "|r."
-    btn = "Show me"
-  elseif a.kind == "stop" then
+  d:text(top - 7, C.gold .. "DO THIS NEXT|r" .. C.grey .. "   for " .. dg.name .. "  -  " .. p.ready .. " of " .. p.total .. " quests|r", "GameFontNormalSmall", 16, d.w - 30)
+  local icon = d:icon(a.kind == "finish" and "turnin" or (a.kind == "stop" and "pickup" or "map"), 16, top - 24, 28)
+  local line, sub, btn, fn, link
+  if a.kind == "stop" then
     local npc, names, n = D.stopText(a.stop)
-    local dist = a.stop.dist and string.format(" - %d yards away", math.floor(a.stop.dist / 10 + 0.5) * 10) or ""
-    line = "Next stop: " .. C.white .. npc .. "|r" .. C.grey .. ", " .. (QM.mapName(a.stop.giver.map) or "") .. dist .. "|r\n" ..
-           "Pick up " .. C.gold .. names .. "|r" .. (#p.stops > 1 and (C.grey .. "   (" .. (#p.stops - 1) .. " more stop" .. (#p.stops > 2 and "s" or "") .. " after this)|r") or "")
-    btn = "Take me there"
+    local dist = a.stop.dist and (a.stop.dist < 40 and "right here" or string.format("%d yards away", math.floor(a.stop.dist / 10 + 0.5) * 10))
+    line = "Talk to " .. C.white .. npc .. "|r and pick up " .. C.gold .. names .. "|r"
+    sub = (QM.mapName(a.stop.giver.map) or "") .. (dist and ("  -  " .. dist) or "")
+    btn, fn = "Take me there", function() D.go(dg) end
+    local qids = {}
+    for _, qid in ipairs(a.stop.steps) do qids[#qids + 1] = qid end
+    link = { (n > 1 and "They don't offer these?" or "Not offered to you?"), function() QM.Offers.markBlocked(qids, npc) end,
+             "If the quest giver doesn't have it for you, click this: Questmates skips it and shows what probably unlocks it." }
+  elseif a.kind == "finish" then
+    line = "Finish " .. C.gold .. (QM.titleOf(a.qid) or "?") .. "|r - it's in your quest log"
+    sub = "It unlocks " .. (QM.titleOf(a.forQuest) or "a dungeon quest")
+    btn, fn = "Show me", function() D.go(dg) end
   elseif a.place then
-    line = C.green .. "You have every quest you can get for now!|r Head to the dungeon entrance" .. C.grey .. ", " .. (QM.mapName(a.place.map) or "") .. "|r."
-    btn = "Take me there"
+    line = C.green .. "You have every quest you can get now.|r Go to the dungeon!"
+    sub = QM.mapName(a.place.map) or ""
+    btn, fn = "Take me there", function() D.go(dg) end
   else
-    line = C.green .. "You have every quest you can get for now!|r"
+    line = C.green .. "You have every quest you can get now.|r Go to the dungeon!"
+    sub = "Its entrance isn't known yet - it's learned when someone in your party goes in."
   end
-  d:text(top - 24, line, "GameFontHighlightSmall", 16, d.w - 160)
-  if btn then d:action(btn, top - 18, function() D.go(dg) end, 130) end
-  return top - 70
+  d:text(top - 24, line, "GameFontHighlight", 54, d.w - 200)
+  d:text(top - 42, C.grey .. sub .. "|r", "GameFontHighlightSmall", 54, d.w - 200)
+  if btn then d:action(btn, top - 26, fn, 130) end
+  if link then d:link(link[1], d.w - 140, top - 54, link[2], link[3]) end
+  return top - h - 8
 end
 
--- One dungeon's page.
+-- One line per quest: what it means for you, in two words.
+local ORDER = { ready = 1, chain = 1, finish = 2, have = 3, blocked = 4, level = 5, unknown = 6, inside = 7, item = 7, done = 9 }
+local function tagFor(id, st, s)
+  if st == "ready" then return C.orange .. "Pick up|r", "pickup"
+  elseif st == "chain" then
+    local t = QM.titleOf(s.qid)
+    if t and t == QM.titleOf(id) then return C.grey .. "After: |r" .. "part " .. s.n .. " of " .. s.total, "lock" end
+    return C.grey .. "After: |r" .. (t or "an earlier quest"), "lock"
+  elseif st == "finish" then return C.grey .. "After: |r" .. (QM.titleOf(s.qid) or "?") .. C.grey .. " (in your log)|r", "lock"
+  elseif st == "have" then return C.green .. "In your log|r", "turnin"
+  elseif st == "blocked" then return C.grey .. "Not offered yet|r", "lock"
+  elseif st == "level" then return C.grey .. "Level " .. QM.minLevelOf(s.qid) .. "|r", "lock"
+  elseif st == "inside" or st == "item" then return C.soft .. "Get it inside|r", "map"
+  elseif st == "done" then return C.grey .. "Done|r", "done" end
+  return C.grey .. "Start unknown|r", "lock"
+end
+
+-- One dungeon's page: the next thing to do, then a plain checklist.
 function D.renderDungeon(d, J, dg)
   local y = -8
   d:action("All dungeons", y + 2, function() J.dungeon = nil; J.refresh() end, 110)
   y = d:text(y, dg.name, "QuestTitleFont", 10, d.w - 140, 1, 0.82, 0)
   local e = D.entrance(dg)
-  local ent = ""
+  local info = (dg.lo > 0) and ("Level " .. dg.lo .. (dg.hi ~= dg.lo and ("-" .. dg.hi) or "")) or ""
   if e then
     local dist = QM.distanceTo(e.map, e.x, e.y)
-    ent = "   Entrance: " .. (QM.mapName(e.map) or "?") .. (dist and string.format(", %d yd", math.floor(dist / 10 + 0.5) * 10) or "")
+    info = info .. "   Entrance: " .. (QM.mapName(e.map) or "?") .. (dist and string.format(", %d yd", math.floor(dist / 10 + 0.5) * 10) or "")
   end
-  if not e then ent = "   Entrance: not known yet - it's learned the first time someone in your party goes in" end
-  y = d:text(y, C.grey .. (dg.lo > 0 and ("Level " .. dg.lo .. (dg.hi ~= dg.lo and ("-" .. dg.hi) or "")) or "") .. (dg.raid and "  (raid)" or "") .. ent .. "|r", "GameFontHighlightSmall", 10, d.w - 150)
+  y = d:text(y, C.grey .. info .. "|r", "GameFontHighlightSmall", 10, d.w - 150)
+  y = y - 6
 
   local task = D.task()
   if task and task.area == dg.area then
-    y = D.renderTaskBox(d, y - 6, dg)
+    y = D.renderTaskBox(d, y, dg)
   else
-    local top = y - 6
-    local box = d:card(top, 52, nil, { 1, 0.82, 0.2 })
+    local top = y
+    local box = d:card(top, 56, nil, { 1, 0.82, 0.2 })
     box:EnableMouse(false)
-    d:text(top - 8, C.white .. "Doing this dungeon with your party?|r", "GameFontHighlight", 16, d.w - 160)
-    d:text(top - 26, C.soft .. "Questmates will walk you to every quest for it, in order, and share them with your friends.|r", "GameFontHighlightSmall", 16, d.w - 160)
-    d:action("Get ready", top - 14, function() D.setTask(dg.area); J.refresh() end, 130)
-    y = top - 60
+    d:text(top - 9, C.white .. "Doing this dungeon with your party?|r", "GameFontHighlight", 16, d.w - 170)
+    d:text(top - 28, C.grey .. "Questmates walks you to every quest for it, one at a time, and shares them with your friends.|r", "GameFontHighlightSmall", 16, d.w - 170)
+    d:action("Get ready", top - 16, function() D.setTask(dg.area); J.refresh() end, 130)
+    y = top - 64
+  end
+
+  -- the checklist (the quests the "Do this next" card is about come first, tagged Next)
+  local nextFor = {}
+  local a = D.nextAction(dg)
+  if a.kind == "stop" then for _, id in ipairs(a.stop.forQuests) do nextFor[id] = true end
+  elseif a.kind == "finish" then nextFor[a.forQuest] = true end
+  local rows = {}
+  for _, id in ipairs(D.questsFor(dg)) do
+    local st, s = D.state(id)
+    rows[#rows + 1] = { id = id, st = st, s = s, o = nextFor[id] and 0 or (ORDER[st] or 6), title = QM.titleOf(id) or ("Quest " .. id), isNext = nextFor[id] }
+  end
+  table.sort(rows, function(a, b) if a.o ~= b.o then return a.o < b.o end return a.title < b.title end)
+  y = d:section(y, "Quests", #rows .. " for you" .. (#QM.mateList() > 0 and "  -  click one for details" or ""))
+  for _, r in ipairs(rows) do
+    local top = y
+    local tag, icon = tagFor(r.id, r.st, r.s)
+    if r.isNext then
+      local first = (r.st == "chain" or r.st == "finish") and QM.titleOf(r.s.qid)
+      if first and first == r.title then first = "part " .. r.s.n .. " of " .. r.s.total end
+      tag = C.orange .. "Next|r" .. (first and (C.grey .. "  (first: " .. first .. ")|r") or "")
+    end
+    d:icon(icon, 14, top - 1, 16)
+    local _, fs = d:text(top - 2, (r.st == "done" and C.grey or C.gold) .. r.title .. "|r", "GameFontHighlight", 36, d.w * 0.45)
+    fs:SetWordWrap(false)
+    if r.st == "done" then d:strike(fs) end
+    -- friends who have it: a small mark after the tag
+    local mates = ""
+    for _, full in ipairs(QM.mateList()) do
+      local m = QM.mates[full]
+      if m and m.quests and m.quests[r.id] then mates = mates .. "  " .. QM.nameText(full) .. " " .. W.markup("link", 12) end
+    end
+    local _, tfs = d:text(top - 3, tag .. mates, "GameFontHighlightSmall", 36 + d.w * 0.45 + 8, d.w * 0.55 - 52)
+    tfs:SetWordWrap(false)
+    local holder
+    for _, full in ipairs(QM.mateList()) do if QM.mates[full] and QM.mates[full].quests[r.id] then holder = full break end end
+    local c = d:card(top + 2, 22, function() QM:Fire("OPEN", holder or "me", r.id) end)
+    c.bg:SetVertexColor(1, 1, 1, 0)
+    c.edge:SetVertexColor(0, 0, 0, 0)
+    y = top - 23
   end
 
   local p = D.plan(dg)
-  local function questRow(id, sub)
-    local title, level = QM.titleOf(id)
-    local st = D.state(id)
-    local top = y
-    local holder
-    for _, full in ipairs(QM.mateList()) do if QM.mates[full] and QM.mates[full].quests[id] then holder = full break end end
-    local icon = (st == "have") and "turnin" or (st == "done") and "done" or (st == "ready") and "pickup" or "lock"
-    d:icon(icon, 14, y, 14)
-    y = d:text(y, C.gold .. (title or ("Quest " .. id)) .. "|r" .. C.grey .. "  [" .. (level or "?") .. "]|r", "GameFontHighlightSmall", 34, d.w - 50)
-    y = d:text(y, sub or stateLine(id), "GameFontHighlightSmall", 34, d.w - 50)
-    local party = partyIcons(id)
-    if party ~= "" then y = d:text(y, party, "GameFontHighlightSmall", 34, d.w - 50) end
-    -- the whole row opens the quest's page (what to do, what unlocks it)
-    local c = d:card(top + 3, top - y + 3, function() QM:Fire("OPEN", holder or "me", id) end)
-    c.bg:SetVertexColor(1, 1, 1, 0)
-    c.edge:SetVertexColor(0, 0, 0, 0)
-    y = y - 5
-  end
-
-  if #p.stops > 0 then
-    y = d:section(y, "Where to go, in order", "Nearest first. The journal and the tracker always show the next stop.")
-    for i, stop in ipairs(p.stops) do
-      local npc, _, n = D.stopText(stop)
-      local dist = stop.dist and string.format(", %d yd", math.floor(stop.dist / 10 + 0.5) * 10) or ""
-      y = d:text(y, (i == 1 and (C.orange .. "Next: |r") or (C.grey .. i .. ". |r")) .. C.white .. npc .. "|r" ..
-                 C.grey .. " - " .. (QM.mapName(stop.giver.map) or "?") .. dist .. "|r", "GameFontHighlight", 14, d.w - 30)
-      for _, qid in ipairs(stop.steps) do
-        local isDungeonQuest = false
-        for _, f in ipairs(stop.forQuests) do if f == qid then isDungeonQuest = true end end
-        local leads = ""
-        if not isDungeonQuest then
-          for _, f in ipairs(stop.forQuests) do
-            local s = QM.nextStep(f)
-            if s.qid == qid then
-              local ft = QM.titleOf(f)
-              if ft == QM.titleOf(qid) then leads = C.grey .. "  (part " .. s.n .. " of " .. s.total .. ")|r"
-              else leads = C.grey .. "  (leads to " .. (ft or "?") .. ")|r" end
-              break
-            end
-          end
-        end
-        y = d:text(y, "   " .. W.markup("pickup", 12) .. " " .. C.gold .. (QM.titleOf(qid) or "?") .. "|r" .. leads, "GameFontHighlightSmall", 14, d.w - 30)
-      end
-      y = y - 6
-    end
-  end
-  if #p.finish > 0 then
-    y = d:section(y, "Finish these first", "They're in your log and unlock dungeon quests.")
-    for _, f in ipairs(p.finish) do questRow(f.id) end
-  end
-  if #p.have > 0 then
-    y = d:section(y, "In your quest log")
-    for _, id in ipairs(p.have) do questRow(id) end
-    if QM.groupChannel() then
-      d:action("Share all with party", y + 4, function() D.shareAll(dg) end, 150, "Shares every quest for this dungeon your friends don't have yet.")
-      y = y - 24
-    end
-  end
-  if #p.inside > 0 then
-    y = d:section(y, "You get these inside", "They start in the dungeon - from someone you meet or an item you find there.")
-    for _, id in ipairs(p.inside) do questRow(id) end
-  end
-  if #p.later > 0 then
-    y = d:section(y, "Not yet", "Higher level, not offered to you yet, or the start isn't known.")
-    for _, l in ipairs(p.later) do questRow(l.id) end
-  end
-  if #p.done > 0 then
-    y = d:section(y, "Already done")
-    for _, id in ipairs(p.done) do
-      d:icon("done", 14, y, 14)
-      local ny, fs = d:text(y, C.grey .. (QM.titleOf(id) or ("Quest " .. id)) .. "|r", "GameFontHighlightSmall", 34, d.w - 50)
-      d:strike(fs)
-      y = ny - 2
-    end
+  if #p.have > 0 and QM.groupChannel() then
+    d:link("Share my quests for this dungeon with the party", 14, y - 6, function() D.shareAll(dg) end,
+           "Shares every quest for this dungeon your friends don't have yet.")
+    y = y - 24
   end
   return y
 end

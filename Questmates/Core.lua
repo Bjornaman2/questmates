@@ -7,7 +7,7 @@
 local ADDON, QM = ...
 _G.Questmates = QM
 
-QM.VERSION = "2.9.1"
+QM.VERSION = "2.9.2"
 QM.PREFIX = "QMATE2"
 local SEP, OSEP = "~", "^"
 local MAXMSG = 250

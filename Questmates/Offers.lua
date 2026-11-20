@@ -30,6 +30,17 @@ function O.blocked(id)
   return b
 end
 
+-- "He doesn't offer it?" - the player tells us (the game has no way to ask an NPC without talking to them).
+function O.markBlocked(qids, npc)
+  local c = charDB()
+  for _, qid in ipairs(qids) do
+    c.blocked[qid] = { npc = npc, level = UnitLevel("player") or 1, t = time(), byHand = true }
+    O.ask(qid)
+  end
+  if QM.guideTarget and QM.guideTarget.npc == npc then QM.stopGuide() end
+  QM:Changed()
+end
+
 -- Quests near this one that could unlock it: same NPC (gives or takes), a bit lower or equal level.
 function O.candidates(id)
   local q = QM.DQ(id)

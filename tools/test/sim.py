@@ -299,6 +299,12 @@ print("blocked after direct window:", Z.execute("local b = Questmates.Offers.blo
 Z.execute("Questmates:Fire('OPEN', nil, 94982)"); tick(1)
 txt = Z.execute("return TEXTS(QuestmatesJournal)")
 i = txt.find("What probably unlocks it"); print(txt[i:i+420])
+Z.execute("Questmates:Fire('OPEN_DUNGEON', 17780)"); tick(1)
+txt = Z.execute("return TEXTS(QuestmatesJournal)")
+i = txt.find("Krol'dok Stronghold\nLevel"); print("--- NEW DUNGEON PAGE ---"); print(txt[i:i+1200])
+# fallback link: mark Ranath's quest as not offered by hand
+Z.execute("for _, b in ipairs(Questmates.journal.homeDoc.pools.link or {}) do if b.shown and b.text.text:find('offer') then b.scripts.OnClick(b) break end end"); tick(1)
+print("after link, next:", Z.execute("local a = Questmates.Dungeons.nextAction(Questmates.Dungeons.get(17780)) return a.kind .. ' ' .. (a.stop and a.stop.giver.npc or (a.qid and Questmates.titleOf(a.qid)) or '')"))
 errors(Z, "Z direct")
 
 print("\nRESULT:", "FAIL " + ", ".join(fails) if fails else "no Lua errors")
