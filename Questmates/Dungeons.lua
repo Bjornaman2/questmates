@@ -171,7 +171,21 @@ function D.state(id)
   if QM.completedByMe(id) then return "done" end
   local s = QM.nextStep(id)
   if s.kind == "finish" then return "finish", s end
-  if s.kind == "blocked" then return "blocked", s end
+  if s.kind == "blocked" then
+    -- not available to you: work out the most likely unlock by itself
+    local h = QM.Offers.hints(s.qid)[1]
+    if h and h.inLog then
+      return "finish", { qid = h.qid, n = 1, total = 2, kind = "finish", guessed = true, blockedQid = s.qid, path = { h.qid, s.qid } }
+    end
+    if h and #h.who > 0 then
+      local s2 = QM.nextStep(h.qid)
+      if s2.kind == "pickup" and s2.giver and s2.giver.map and s2.giver.x then
+        s2.guessed, s2.blockedQid = true, s.qid
+        return "chain", s2
+      end
+    end
+    return "blocked", s
+  end
   if QM.minLevelOf(s.qid) > myLevel() then return "level", s end
   local g = s.giver
   if g and g.item then return "item", s end
@@ -302,7 +316,7 @@ function D.nextAction(dg)
   if stop then return { kind = "stop", stop = stop }, p end
   if #p.finish > 0 then
     local f = p.finish[1]
-    return { kind = "finish", qid = f.step.qid, forQuest = f.id }, p
+    return { kind = "finish", qid = f.step.qid, forQuest = f.id, guessed = f.step.guessed }, p
   end
   return { kind = "entrance", place = D.entrance(dg) }, p
 end
@@ -526,13 +540,13 @@ function D.renderTaskBox(d, y, dg)
     line = "Talk to " .. C.white .. npc .. "|r and pick up " .. C.gold .. names .. "|r"
     sub = (QM.mapName(a.stop.giver.map) or "") .. (dist and ("  -  " .. dist) or "")
     btn, fn = "Take me there", function() D.go(dg) end
-    local qids = {}
-    for _, qid in ipairs(a.stop.steps) do qids[#qids + 1] = qid end
-    link = { (n > 1 and "They don't offer these?" or "Not offered to you?"), function() QM.Offers.markBlocked(qids, npc) end,
-             "If the quest giver doesn't have it for you, click this: Questmates skips it and shows what probably unlocks it." }
+    local qids, unknown = {}, false
+    for _, qid in ipairs(a.stop.steps) do qids[#qids + 1] = qid; if QM.Offers.status(qid) == nil then unknown = true end end
+    if unknown then link = { (n > 1 and "They don't offer these?" or "Not offered to you?"), function() QM.Offers.markBlocked(qids, npc) end,
+             "If the quest giver doesn't have it for you, click this: Questmates skips it and shows what probably unlocks it." } end
   elseif a.kind == "finish" then
     line = "Finish " .. C.gold .. (QM.titleOf(a.qid) or "?") .. "|r - it's in your quest log"
-    sub = "It unlocks " .. (QM.titleOf(a.forQuest) or "a dungeon quest")
+    sub = (a.guessed and "It most likely unlocks " or "It unlocks ") .. (QM.titleOf(a.forQuest) or "a dungeon quest")
     btn, fn = "Show me", function() D.go(dg) end
   elseif a.place then
     line = C.green .. "You have every quest you can get now.|r Go to the dungeon!"
@@ -556,10 +570,10 @@ local function tagFor(id, st, s)
   elseif st == "chain" then
     local t = QM.titleOf(s.qid)
     if t and t == QM.titleOf(id) then return C.grey .. "After: |r" .. "part " .. s.n .. " of " .. s.total, "lock" end
-    return C.grey .. "After: |r" .. (t or "an earlier quest"), "lock"
-  elseif st == "finish" then return C.grey .. "After: |r" .. (QM.titleOf(s.qid) or "?") .. C.grey .. " (in your log)|r", "lock"
+    return C.grey .. "After: |r" .. (t or "an earlier quest") .. (s.guessed and (C.grey .. " (probably)|r") or ""), "lock"
+  elseif st == "finish" then return C.grey .. "After: |r" .. (QM.titleOf(s.qid) or "?") .. C.grey .. (s.guessed and " (in your log, probably)|r" or " (in your log)|r"), "lock"
   elseif st == "have" then return C.green .. "In your log|r", "turnin"
-  elseif st == "blocked" then return C.grey .. "Not offered yet|r", "lock"
+  elseif st == "blocked" then return C.grey .. "Not available yet|r", "lock"
   elseif st == "level" then return C.grey .. "Level " .. QM.minLevelOf(s.qid) .. "|r", "lock"
   elseif st == "inside" or st == "item" then return C.soft .. "Get it inside|r", "map"
   elseif st == "done" then return C.grey .. "Done|r", "done" end

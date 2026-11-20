@@ -7,7 +7,7 @@
 local ADDON, QM = ...
 _G.Questmates = QM
 
-QM.VERSION = "2.9.2"
+QM.VERSION = "2.10.0"
 QM.PREFIX = "QMATE2"
 local SEP, OSEP = "~", "^"
 local MAXMSG = 250
@@ -301,7 +301,13 @@ function QM.giverOf(id)
   local st = q and q[8]
   if not st then return nil end
   if st[1] == "item" then return { item = st[2], fromDB = true } end
-  return { npc = st[2], map = st[3], x = st[4], y = st[5], fromDB = true, object = (st[1] == "obj") or nil }
+  local g = { npc = st[2], map = st[3], x = st[4], y = st[5], fromDB = true, object = (st[1] == "obj") or nil }
+  -- the game's own quest offer position, when it has told us (exact for WoW Forever)
+  if QM.Offers then
+    local map, x, y = QM.Offers.offerPos(id)
+    if map and x and x > 0 then g.map, g.x, g.y = map, x, y end
+  end
+  return g
 end
 
 function QM.turninOf(id)
@@ -1213,6 +1219,7 @@ ev:SetScript("OnEvent", function(_, event, ...)
       K().turnins[id] = { npc = p.npc, map = p.map, x = p.x, y = p.y, zone = p.zone }
       lastTurnin = { id = id, npc = p.npc, t = GetTime() }
       QM.lastTurnin = lastTurnin
+      QM:Fire("TURNED_IN", id)
       pendingTurnin = nil
     end
     scheduleScan()

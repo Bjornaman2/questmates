@@ -21,14 +21,136 @@ local function charDB()
   return c
 end
 
--- Is this quest marked as not offered to you (and still not offered at your level)?
+---------------------------------------------------------------------------------------------------
+-- Ask the game: which quests can you pick up right now? (the same data the map's "!" quest offers use:
+-- C_QuestLine.RequestQuestLinesForMap -> QUESTLINE_UPDATE -> GetAvailableQuestLines). The server decides it,
+-- so hidden prerequisites, level and faction are already taken into account.
+---------------------------------------------------------------------------------------------------
+
+local avail = {}       -- [uiMapID] = { t, set = {questID = true}, pos = {questID = {x, y}}, reliable }
+local requested = {}   -- [uiMapID] = time asked
+local function canAsk()
+  return C_QuestLine and C_QuestLine.RequestQuestLinesForMap and C_QuestLine.GetAvailableQuestLines and true or false
+end
+O.canAsk = canAsk
+
+function O.request(map)
+  if not (canAsk() and map) then return end
+  if requested[map] and GetTime() - requested[map] < 15 then return end
+  requested[map] = GetTime()
+  pcall(C_QuestLine.RequestQuestLinesForMap, map)
+end
+
+local function readMap(map)
+  if not QM.DData then return end
+  local set, pos = {}, {}
+  local ok, list = pcall(C_QuestLine.GetAvailableQuestLines, map)
+  if ok and type(list) == "table" then
+    for _, info in ipairs(list) do
+      local id = QM.safe(info.questID)
+      if id then set[id] = true; pos[id] = { QM.safe(info.x), QM.safe(info.y) } end
+    end
+  end
+  if C_QuestLine.GetForceVisibleQuests then
+    local ok2, force = pcall(C_QuestLine.GetForceVisibleQuests, map)
+    if ok2 and type(force) == "table" then for _, id in ipairs(force) do set[id] = true end end
+  end
+  -- Can we trust a quest's ABSENCE? Only if the game lists most of the quests on this map that you can
+  -- plainly take (no prerequisites at all, level ok, not done).
+  local lvl = UnitLevel("player") or 1
+  local expected, found = 0, 0
+  for qid, r in pairs(QM.DData.Q) do
+    local st = r[8]
+    if st and st[3] == map and not r[6] and not r[7] and (r[3] or 0) <= lvl and not QM.me.quests[qid]
+       and QM.questForMe(qid) and not QM.completedByMe(qid) then
+      expected = expected + 1
+      if set[qid] then found = found + 1 end
+    end
+  end
+  avail[map] = { t = GetTime(), set = set, pos = pos, expected = expected, found = found,
+                 reliable = expected >= 3 and found / expected >= 0.6 }
+end
+
+-- "available" / "unavailable" / nil (the game hasn't told us, or its list for that map isn't complete enough)
+function O.status(id)
+  local q = QM.DQ(id)
+  local map = q and q[8] and q[8][3]
+  local a = map and avail[map]
+  if not a then return nil end
+  if a.set[id] then return "available" end
+  if a.reliable and GetTime() - a.t < 600 then return "unavailable" end
+  return nil
+end
+
+-- Where the game puts the quest offer (more exact than the database).
+function O.offerPos(id)
+  local q = QM.DQ(id)
+  local map = q and q[8] and q[8][3]
+  local a = map and avail[map]
+  local p = a and a.pos[id]
+  if p and p[1] then return map, p[1], p[2] end
+end
+
+-- Is this quest not available to you (the game says so, or the NPC didn't offer it)?
 function O.blocked(id)
   if not QM.DB then return nil end
+  local st = O.status(id)
+  if st == "available" then return nil end
   local b = charDB().blocked[id]
-  if not b then return nil end
-  if (UnitLevel("player") or 1) > (b.level or 0) then return nil end   -- you levelled since: try again
-  return b
+  if b and (UnitLevel("player") or 1) > (b.level or 0) then b = nil end   -- you levelled since: try again
+  if b then return b end
+  if st == "unavailable" then
+    local q = QM.DQ(id)
+    return { npc = q and q[8] and q[8][2], auto = true }
+  end
+  return nil
 end
+
+-- Which maps matter: where the next quests are (dungeon task, friends' quests, the guide) + where you are.
+local function interestingMaps()
+  local maps = {}
+  local pm = QM.playerPos()
+  if pm then maps[pm] = true end
+  local function add(id)
+    local q = QM.DQ(id)
+    if q and q[8] and q[8][3] then maps[q[8][3]] = true end
+  end
+  local g = QM.guideTarget
+  if g and g.qid then add(g.qid) end
+  local dg = QM.Dungeons and QM.Dungeons.task()
+  if dg then for id in pairs(QM.Dungeons.chainSet(dg)) do add(id) end end
+  for _, full in ipairs(QM.mateList()) do
+    local m = QM.mates[full]
+    if m and m.quests then for id in pairs(m.quests) do for _, p in ipairs(QM.pathTo(id)) do add(p) end end end
+  end
+  return maps
+end
+
+function O.refresh()
+  if not canAsk() then return end
+  for map in pairs(interestingMaps()) do O.request(map) end
+end
+
+local qev = CreateFrame("Frame")
+pcall(qev.RegisterEvent, qev, "QUESTLINE_UPDATE")
+qev:SetScript("OnEvent", function(_, _, requestRequired)
+  if requestRequired then
+    for map, t in pairs(requested) do if GetTime() - t < 300 then requested[map] = nil; O.request(map) end end
+    return
+  end
+  for map, t in pairs(requested) do if GetTime() - t < 300 then pcall(readMap, map) end end
+  QM:Changed()
+end)
+C_Timer.NewTicker(30, function() pcall(O.refresh) end)
+for _, e in ipairs({ "ENTERED_WORLD", "ACCEPTED", "TURNED_IN", "LEARNED" }) do
+  QM:On(e, function() C_Timer.After(2, function() pcall(O.refresh) end) end)
+end
+local refreshSoon = false
+QM:On("UPDATE", function()
+  if refreshSoon then return end
+  refreshSoon = true
+  C_Timer.After(5, function() refreshSoon = false; pcall(O.refresh) end)
+end)
 
 -- "He doesn't offer it?" - the player tells us (the game has no way to ask an NPC without talking to them).
 function O.markBlocked(qids, npc)
@@ -60,7 +182,16 @@ function O.candidates(id)
 end
 
 -- What you could do about it: candidates you haven't done, the ones a friend has done first.
+local hintCache = {}
 function O.hints(id)
+  local c = hintCache[id]
+  if c and GetTime() - c.t < 5 then return c.list end
+  local list = O.computeHints(id)
+  hintCache[id] = { t = GetTime(), list = list }
+  return list
+end
+QM:On("UPDATE", function() wipe(hintCache) end)
+function O.computeHints(id)
   local list = {}
   for _, qid in ipairs(O.candidates(id)) do
     if QM.me.quests[qid] and QM.me.quests[qid].state ~= -1 then
@@ -142,7 +273,7 @@ local function check(npc, offered)
     if r[8] and r[8][1] == "npc" and r[8][2] == npc then
       if offered[qid] then
         c.blocked[qid] = nil
-      elseif not QM.me.quests[qid] and not QM.completedByMe(qid) and QM.questForMe(qid)
+      elseif not QM.me.quests[qid] and not QM.completedByMe(qid) and QM.questForMe(qid) and O.status(qid) ~= "available"
              and (r[3] or 0) <= lvl and QM.nextStep(qid).qid == qid and relevant(qid) then
         if not c.blocked[qid] then newly[#newly + 1] = qid end
         c.blocked[qid] = { npc = npc, level = lvl, t = time() }

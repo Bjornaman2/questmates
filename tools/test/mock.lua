@@ -237,6 +237,12 @@ QuestMapFrame.QuestsFrame.DetailsFrame = CreateFrame("Frame")
 QuestMapFrame.QuestsFrame.DetailsFrame.ShareButton = CreateFrame("Button")
 function QuestMapFrame_GetDetailQuestID() return SELECTED end
 C_GossipInfo = { GetAvailableQuests = function() local t = {} for _, id in ipairs(GOSSIP_OFFER or {}) do t[#t + 1] = { questID = id } end return t end }
+AVAIL_LINES = {}
+C_QuestLine = {
+  RequestQuestLinesForMap = function(map) C_Timer.After(0.5, function() FIRE("QUESTLINE_UPDATE", false) end) end,
+  GetAvailableQuestLines = function(map) return AVAIL_LINES[map] or {} end,
+  GetForceVisibleQuests = function() return {} end,
+}
 TooltipDataProcessor = { AddTooltipPostCall = function(t, fn) TOOLTIP_CB = fn end }
 Enum = { TooltipDataType = { Unit = 2 } }
 

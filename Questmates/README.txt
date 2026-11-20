@@ -67,9 +67,12 @@ DUNGEONS  (/qm dungeons, or "Dungeons" in the journal)
   Questmates also LEARNS from the game and shares it with your party: quests your quest log files under a
   dungeon's name (or that the game tags Dungeon / Raid), and every dungeon someone enters, with its entrance.
 
-WHEN A QUEST GIVER DOESN'T OFFER THE QUEST
-  The quest database can miss a prerequisite (WoW Forever's newest quests especially). When you talk to a quest
-  giver, Questmates checks what they really offer you. If a quest you were sent for isn't there, you get a note,
+WHEN A QUEST ISN'T AVAILABLE TO YOU YET
+  The quest database can miss a prerequisite (WoW Forever's newest quests especially). So Questmates asks the
+  game itself which quests you can pick up right now (the same data the map's "!" quest offers use) for the
+  maps that matter - no NPC visit needed. A quest that isn't available is planned automatically: if you have a
+  quest from the same quest giver in your log, "finish it first"; if a friend did a nearby quest you haven't,
+  that one first. It also checks when you talk to a quest giver. If a quest you were sent for isn't there, you get a note,
   the guide moves on, and the quest's page shows "What probably unlocks it": that NPC's other quests around that
   level you haven't done - the ones your friends have done first. Once you get it, the real prerequisite is
   remembered and shared with your party.

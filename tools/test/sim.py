@@ -307,4 +307,35 @@ Z.execute("for _, b in ipairs(Questmates.journal.homeDoc.pools.link or {}) do if
 print("after link, next:", Z.execute("local a = Questmates.Dungeons.nextAction(Questmates.Dungeons.get(17780)) return a.kind .. ' ' .. (a.stop and a.stop.giver.npc or (a.qid and Questmates.titleOf(a.qid)) or '')"))
 errors(Z, "Z direct")
 
+section("GAME KNOWS SCENARIO")
+Y = client("Yara", "MAGE")
+clients = {"Yara": Y}
+Y.execute("MYLEVEL = 45; LOG = {{id=94877, title='Saving Sunnyglade', level=40, share=true, obj={{text='Twilight cultist slain', have=3, need=8}}}}")
+# the server: every quest on Riverglades (2548) you can plainly take is available, plus the chain starts - but NOT Eye of Mugg
+Y.execute("""
+local list = {}
+for qid, r in pairs(Questmates.DData.Q) do
+  local st = r[8]
+  if st and st[3] == 2548 and qid ~= 94982 and (r[3] or 0) <= 45 and Questmates.questForMe(qid) and not COMPLETED[qid] and qid ~= 94877 then
+    list[#list + 1] = { questID = qid, x = st[4], y = st[5] }
+  end
+end
+AVAIL_LINES[2548] = list
+""")
+Y.globals().FIRE("PLAYER_ENTERING_WORLD"); tick(1)
+Y.execute("Questmates.Dungeons.setTask(17780)"); tick(6, 60)
+print("game status for Eye of Mugg:", Y.execute("return tostring(Questmates.Offers.status(94982))"), "| map reliable:", Y.execute("local q = Questmates.DQ(94982) return tostring(q[8][3])"))
+Y.execute("Questmates:Fire('OPEN_DUNGEON', 17780)"); tick(1)
+txt = Y.execute("return TEXTS(QuestmatesJournal)")
+i = txt.find("DO THIS NEXT"); print("--- page ---"); print(txt[i:i+900])
+# after picking up the other stops, the card should say: finish Saving Sunnyglade (most likely unlocks Eye of Mugg)
+print("actions in order:")
+for k in range(4):
+    a = Y.execute("local a = Questmates.Dungeons.nextAction(Questmates.Dungeons.get(17780)) if a.kind == 'stop' then local n, names = Questmates.Dungeons.stopText(a.stop) return 'stop: ' .. n .. ' - ' .. names elseif a.kind == 'finish' then return 'finish: ' .. Questmates.titleOf(a.qid) .. ' -> ' .. Questmates.titleOf(a.forQuest) .. (a.guessed and ' (most likely)' or '') else return a.kind end")
+    print("  ", a)
+    if not a.startswith("stop"): break
+    Y.execute("local a = Questmates.Dungeons.nextAction(Questmates.Dungeons.get(17780)) for _, qid in ipairs(a.stop.steps) do table.insert(LOG, {id=qid, title=Questmates.titleOf(qid), level=40, share=true, obj={}}) end")
+    Y.globals().FIRE("QUEST_LOG_UPDATE"); tick(1, 10)
+errors(Y, "Y game knows")
+
 print("\nRESULT:", "FAIL " + ", ".join(fails) if fails else "no Lua errors")
