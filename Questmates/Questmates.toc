@@ -1,0 +1,20 @@
+## Interface: 16001
+## Title: Questmates
+## Notes: Party questing made easy: see what everyone is on, how to catch up to their quests, get ready for dungeons together, and share map pins. /qm
+## Version: 2.8.0
+## Author: Questmates
+## X-Credits: Quest data from QuestieDB (https://github.com/Questie/QuestieDB), GPL-3.0
+## SavedVariables: QuestmatesDB
+## AddonCompartmentFunc: Questmates_OnAddonCompartmentClick
+## IconTexture: Interface\Icons\INV_Misc_Map_01
+
+QuestData.lua
+Core.lua
+Widgets.lua
+Dungeons.lua
+Toasts.lua
+Tracker.lua
+Journal.lua
+Map.lua
+Templates.xml
+Init.lua

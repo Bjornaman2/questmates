@@ -1,0 +1,6 @@
+﻿# helper libraries and downloaded source data (fetched again when needed, see tools/data/qdb.py)
+tools/pylib/
+tools/data/questie/
+dist/
+__pycache__/
+*.pyc
