@@ -69,6 +69,10 @@ local function readMap(map)
   end
   avail[map] = { t = GetTime(), set = set, pos = pos, expected = expected, found = found,
                  reliable = expected >= 3 and found / expected >= 0.6 }
+  local n, ids = 0, {}
+  for id in pairs(set) do n = n + 1; if #ids < 40 then ids[#ids + 1] = id end end
+  QM.dbg("available on map %s: %d quests (expected %d, found %d, reliable %s) %s", tostring(map), n, expected, found,
+         tostring(avail[map].reliable), table.concat(ids, ","))
 end
 
 -- "available" / "unavailable" / nil (the game hasn't told us, or its list for that map isn't complete enough)
@@ -264,7 +268,12 @@ local function relevant(id)
   return false
 end
 
+function O.availInfo(map) return avail[map] end
+
 local function check(npc, offered)
+  local oids = {}
+  for id in pairs(offered or {}) do oids[#oids + 1] = id end
+  QM.dbg("talked to %s: offers %s", tostring(npc), (#oids > 0) and table.concat(oids, ",") or "nothing new")
   if not npc or not QM.DData then return end
   local c = charDB()
   local lvl = UnitLevel("player") or 1
@@ -273,10 +282,20 @@ local function check(npc, offered)
     if r[8] and r[8][1] == "npc" and r[8][2] == npc then
       if offered[qid] then
         c.blocked[qid] = nil
-      elseif not QM.me.quests[qid] and not QM.completedByMe(qid) and QM.questForMe(qid) and O.status(qid) ~= "available"
-             and (r[3] or 0) <= lvl and QM.nextStep(qid).qid == qid and relevant(qid) then
-        if not c.blocked[qid] then newly[#newly + 1] = qid end
-        c.blocked[qid] = { npc = npc, level = lvl, t = time() }
+      elseif relevant(qid) or (QM.Dungeons and QM.Dungeons.task() and QM.Dungeons.chainSet(QM.Dungeons.task())[qid]) then
+        local why
+        if QM.me.quests[qid] then why = "in log"
+        elseif QM.completedByMe(qid) then why = "done"
+        elseif not QM.questForMe(qid) then why = "not for this character"
+        elseif O.status(qid) == "available" then why = "game lists it as available"
+        elseif (r[3] or 0) > lvl then why = "level " .. tostring(r[3])
+        elseif QM.nextStep(qid).qid ~= qid then why = "earlier step first: " .. tostring(QM.nextStep(qid).qid)
+        end
+        QM.dbg("  %d %s: %s", qid, tostring(r[1]), why and ("not marked (" .. why .. ")") or "NOT OFFERED -> marked")
+        if not why then
+          if not c.blocked[qid] then newly[#newly + 1] = qid end
+          c.blocked[qid] = { npc = npc, level = lvl, t = time() }
+        end
       end
     end
   end
@@ -303,13 +322,16 @@ local lastList = { npc = nil, t = -999 }
 local ev = CreateFrame("Frame")
 for _, e in ipairs({ "GOSSIP_SHOW", "QUEST_GREETING", "QUEST_PROGRESS", "QUEST_COMPLETE" }) do pcall(ev.RegisterEvent, ev, e) end
 ev:SetScript("OnEvent", function(_, event)
+  QM.dbg("event %s (npc %s)", event, tostring(npcName()))
   local offered, ok = {}, false
   if event == "QUEST_PROGRESS" or event == "QUEST_COMPLETE" then
     -- the NPC opened an in-progress / turn-in window straight away: they have nothing new for you
     -- (with anything new to offer, the game shows their quest list first)
     local npc = npcName()
     if npc and not (lastList.npc == npc and GetTime() - lastList.t < 60) then
-      C_Timer.After(0, function() pcall(check, npc, {}) end)
+      C_Timer.After(0, function() local okc, err = pcall(check, npc, {}); if not okc then QM.dbg("check error: %s", tostring(err)) end end)
+    else
+      QM.dbg("  (came from their quest list - already checked)")
     end
     return
   end
@@ -327,10 +349,11 @@ ev:SetScript("OnEvent", function(_, event)
       offered[id] = true
     end
   end
+  if not ok then QM.dbg("  could not read the quest list (%s)", event) end
   if ok then
     local npc = npcName()
     lastList.npc, lastList.t = npc, GetTime()
-    C_Timer.After(0, function() pcall(check, npc, offered) end)
+    C_Timer.After(0, function() local okc, err = pcall(check, npc, offered); if not okc then QM.dbg("check error: %s", tostring(err)) end end)
   end
 end)
 

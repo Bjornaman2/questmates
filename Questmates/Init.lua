@@ -87,12 +87,56 @@ local function onOff(v) return v and (C.green .. "on|r") or (C.red .. "off|r") e
 local TOGGLES = { tracker = "tracker", notes = "toasts", toasts = "toasts", map = "mapPins", pins = "mapPins",
                   share = "shareWaypoint", legend = "mapLegend", tooltips = "tooltips", sound = "sound", chat = "chat", button = "questLogButton" }
 
+-- /qm why <quest name or id>: everything Questmates knows and decides about one quest (also saved to the log).
+local function why(arg)
+  local id = tonumber(arg)
+  if not id and arg ~= "" then
+    local want = arg:lower()
+    local best
+    for qid, r in pairs(QM.DData.Q) do
+      if r[1] and r[1]:lower() == want then
+        if not best or (QM.questForMe(qid) and not QM.questForMe(best)) then best = qid end
+      end
+    end
+    for qid, q in pairs(QM.me.quests) do if q.title:lower() == want then best = qid end end
+    id = best
+  end
+  if not id then QM.print("which quest? /qm why <quest name or id>"); return end
+  local out = {}
+  local function add(fmt, ...) local line = string.format(fmt, ...); out[#out + 1] = line; QM.dbg("why: %s", line) end
+  local _, _, raceID = UnitRace("player")
+  add("Questmates %s - you: level %s, race %s, %s", QM.VERSION, tostring(UnitLevel("player")), tostring(raceID), tostring(UnitFactionGroup("player")))
+  local r = QM.DQ(id)
+  add("quest %d %s - level %s, needs level %s, for you: %s", id, tostring(QM.titleOf(id)), tostring(r and r[2]), tostring(r and r[3]), tostring(QM.questForMe(id)))
+  local g = QM.giverOf(id)
+  add("starts at: %s", g and (QM.placeText(g) or "?") .. (g.fromDB and " (database)" or " (seen in game)") or "unknown")
+  local path = QM.pathTo(id)
+  local parts = {}
+  for _, p in ipairs(path) do parts[#parts + 1] = (QM.titleOf(p) or p) .. "=" .. QM.stepState(p) end
+  add("path: %s", table.concat(parts, " -> "))
+  local O = QM.Offers
+  local st = O.status(id)
+  local map = r and r[8] and r[8][3]
+  local a = map and O.availInfo(map)
+  add("game says: %s%s", tostring(st), a and string.format(" (map %d: %d listed checked %ds ago, expected %d, found %d, reliable %s)",
+      map, (function() local n = 0 for _ in pairs(a.set) do n = n + 1 end return n end)(), math.floor(GetTime() - a.t), a.expected, a.found, tostring(a.reliable))
+      or (O.canAsk() and " (no answer for its map yet)" or " (this game doesn't give that information)"))
+  local b = QM.DB.chars and QM.DB.chars[QM.myFull()] and QM.DB.chars[QM.myFull()].blocked[id]
+  add("marked not offered: %s", b and ((b.npc or "?") .. " at level " .. tostring(b.level) .. (b.byHand and " (by hand)" or "")) or "no")
+  local ds, s = QM.Dungeons.state(id)
+  add("plan: %s%s", tostring(ds), s and s.qid and s.qid ~= id and (" - next: " .. tostring(QM.titleOf(s.qid))) or "")
+  QM.print("why %s:", C.gold .. tostring(QM.titleOf(id)) .. "|r")
+  for _, line in ipairs(out) do print("  " .. line) end
+end
+
 SLASH_QUESTMATES1 = "/qm"
 SLASH_QUESTMATES2 = "/questmates"
 SlashCmdList.QUESTMATES = function(msg)
   msg = (msg or ""):lower():match("^%s*(.-)%s*$")
   if msg == "" then
     QM.journal.toggle()
+  elseif msg:match("^why") then
+    why((msg:gsub("^why%s*", "")))
   elseif msg == "dungeons" or msg == "dungeon" or msg == "d" then
     QM:Fire("OPEN_DUNGEON", QM.DB.task and QM.DB.task.area or nil)
   elseif msg == "demo" then
@@ -115,6 +159,7 @@ SlashCmdList.QUESTMATES = function(msg)
     print("  /qm  -  open the Party Quest Journal")
     print("  /qm demo  -  a pretend party member, to try everything alone")
     print("  /qm dungeons  -  every dungeon's quests; get the party ready for one")
+    print("  /qm why <quest>  -  why Questmates says what it says about a quest")
     print("  /qm options  -  settings      /qm sync  -  resend your quest log")
     print("  /qm movenotes  -  move the party notes      /qm reset  -  reset the tracker position")
     print("  /qm tracker | notes | map | share | tooltips | sound | chat | button  -  switch a part on/off")

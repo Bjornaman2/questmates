@@ -7,7 +7,7 @@
 local ADDON, QM = ...
 _G.Questmates = QM
 
-QM.VERSION = "2.10.0"
+QM.VERSION = "2.10.1"
 QM.PREFIX = "QMATE2"
 local SEP, OSEP = "~", "^"
 local MAXMSG = 250
@@ -90,7 +90,8 @@ end
 
 local function myFull()
   local name = UnitName("player")
-  local realm = GetNormalizedRealmName and GetNormalizedRealmName() or ""
+  local realm = (GetNormalizedRealmName and GetNormalizedRealmName()) or ""
+  if realm == "" and GetRealmName then realm = (GetRealmName() or ""):gsub("[%s%-]", "") end
   return (name or "?") .. "-" .. (realm or "")
 end
 QM.myFull = myFull
@@ -226,6 +227,18 @@ function QM.playSound(kit)
 end
 
 function QM.print(fmt, ...) print(QM.C.gold .. "Questmates:|r " .. string.format(fmt, ...)) end
+
+-- A small diagnostic log, saved with the addon's data (QuestmatesDB.debugLog), so problems in the real game
+-- can be read after a /reload. Keeps the last 300 lines.
+function QM.dbg(fmt, ...)
+  if not QM.DB then return end
+  local ok, line = pcall(string.format, fmt, ...)
+  if not ok then line = tostring(fmt) end
+  local log = QM.DB.debugLog or {}
+  QM.DB.debugLog = log
+  log[#log + 1] = date("%H:%M:%S") .. " " .. line
+  while #log > 300 do table.remove(log, 1) end
+end
 
 ---------------------------------------------------------------------------------------------------
 -- Knowledge: account-wide memory of quest givers, turn-ins and chains (shared with party members)
@@ -1150,6 +1163,12 @@ ev:SetScript("OnEvent", function(_, event, ...)
     DB.know = DB.know or {}
     for _, k in ipairs({ "givers", "turnins", "prev", "titles", "dq", "inst" }) do DB.know[k] = DB.know[k] or {} end
     QM.DB = DB
+    for _, k in ipairs({ "titles", "givers", "turnins", "prev" }) do
+      for id in pairs(DB.know[k]) do if type(id) == "number" and id >= 990000 then DB.know[k][id] = nil end end
+    end
+    if DB.chars and DB.chars["Bjorn-"] == nil then end
+    QM.dbg("loaded %s, level %s, QuestLine API: %s", QM.VERSION, tostring(UnitLevel("player")),
+           tostring(C_QuestLine and C_QuestLine.RequestQuestLinesForMap and C_QuestLine.GetAvailableQuestLines and true or false))
     if DB.lastVersion and DB.lastVersion ~= QM.VERSION then
       local from = DB.lastVersion
       C_Timer.After(6, function() QM.toast("me", "updated", { title = "Version " .. QM.VERSION }, nil, { from = from }) end)
@@ -1258,6 +1277,9 @@ function QM.toggleDemo()
   local D = QM.DEMO
   if mates[D] then
     mates[D] = nil
+    for _, k in ipairs({ "titles", "givers", "turnins", "prev" }) do
+      for id in pairs(K()[k]) do if type(id) == "number" and id >= 990000 then K()[k][id] = nil end end
+    end
     QM.print("demo party member left.")
     QM:Changed()
     return false

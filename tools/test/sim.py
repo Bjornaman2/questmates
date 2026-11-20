@@ -336,6 +336,10 @@ for k in range(4):
     if not a.startswith("stop"): break
     Y.execute("local a = Questmates.Dungeons.nextAction(Questmates.Dungeons.get(17780)) for _, qid in ipairs(a.stop.steps) do table.insert(LOG, {id=qid, title=Questmates.titleOf(qid), level=40, share=true, obj={}}) end")
     Y.globals().FIRE("QUEST_LOG_UPDATE"); tick(1, 10)
+Y.execute("wipe(PRINTS)"); Y.globals().SlashCmdList.QUESTMATES("why Eye of Mugg")
+print("--- WHY OUTPUT ---"); print(Y.execute("return STRIP(table.concat(PRINTS, string.char(10)))"))
+Y.execute("NPC = 'Demar Brant'"); Y.globals().FIRE("QUEST_PROGRESS"); tick(1, 10)
+print("--- LOG (last 8) ---"); print(Y.execute("local l = QuestmatesDB.debugLog local t = {} for i = math.max(1, #l - 7), #l do t[#t+1] = l[i] end return table.concat(t, string.char(10))"))
 errors(Y, "Y game knows")
 
 print("\nRESULT:", "FAIL " + ", ".join(fails) if fails else "no Lua errors")

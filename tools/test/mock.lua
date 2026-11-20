@@ -148,6 +148,8 @@ function GetInstanceInfo() return INSTANCE and INSTANCE.name end
 ACCEPTED_Q = {}
 function AcceptQuest() ACCEPTED_Q[#ACCEPTED_Q + 1] = DETAIL_ID end
 time = os.time
+date = os.date
+function GetRealmName() return REALM end
 function UnitLevel() return MYLEVEL or 12 end
 GROUP = {}
 function IsInGroup() return #GROUP > 0 end
