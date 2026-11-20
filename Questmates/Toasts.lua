@@ -161,6 +161,7 @@ local TEXT = {
   nextstop  = { "Getting ready for a dungeon", "map" },
   shared    = { "Shared with your party", "link" },
   updated   = { "Questmates was updated", "done", "IG_QUEST_LIST_OPEN" },
+  notoffered = { "Not offered to you yet", "lock" },
   version   = { "has a different Questmates version", "ping" },
   arrive    = { "You made it", "pickup", "IG_QUEST_LIST_OPEN" },
   finish    = { "Finish this quest first - the arrow now points to it", "turnin" },
@@ -234,6 +235,9 @@ local function show(d)
       line3 = C.green .. "Head to " .. (dg and dg.name or "the dungeon") .. "|r" .. C.grey .. "  -  click for the way|r"
     end
     d.click = function() if dg then QM.Dungeons.go(dg) end end
+  elseif d.kind == "notoffered" and d.extra then
+    line3 = C.soft .. (d.extra.npc or "They") .. " doesn't offer it - it needs an earlier quest. Click to see what probably unlocks it.|r"
+    d.click = function() QM:Fire("OPEN", nil, q.id) end
   elseif d.kind == "updated" then
     line3 = C.soft .. "It updated itself" .. (d.extra and d.extra.from and (" from " .. d.extra.from) or "") .. ". Type /qm to open the journal.|r"
     d.click = function() QM.journal.toggle() end

@@ -171,6 +171,7 @@ function D.state(id)
   if QM.completedByMe(id) then return "done" end
   local s = QM.nextStep(id)
   if s.kind == "finish" then return "finish", s end
+  if s.kind == "blocked" then return "blocked", s end
   if QM.minLevelOf(s.qid) > myLevel() then return "level", s end
   local g = s.giver
   if g and g.item then return "item", s end
@@ -415,6 +416,9 @@ local function stateLine(id)
     return C.soft .. "Starts from an item you find: |r" .. (s.giver.item or "?")
   elseif st == "inside" then
     return C.soft .. "You get this one inside the dungeon|r"
+  elseif st == "blocked" then
+    return C.orange .. (s.blocked.npc or "The quest giver") .. " doesn't offer " .. (s.qid ~= id and (QM.titleOf(s.qid) or "it") or "it") ..
+           " to you yet|r" .. C.grey .. " - click it to see what probably unlocks it|r"
   end
   return C.grey .. "Where it starts isn't known|r"
 end
@@ -565,12 +569,19 @@ function D.renderDungeon(d, J, dg)
   local function questRow(id, sub)
     local title, level = QM.titleOf(id)
     local st = D.state(id)
+    local top = y
+    local holder
+    for _, full in ipairs(QM.mateList()) do if QM.mates[full] and QM.mates[full].quests[id] then holder = full break end end
     local icon = (st == "have") and "turnin" or (st == "done") and "done" or (st == "ready") and "pickup" or "lock"
     d:icon(icon, 14, y, 14)
     y = d:text(y, C.gold .. (title or ("Quest " .. id)) .. "|r" .. C.grey .. "  [" .. (level or "?") .. "]|r", "GameFontHighlightSmall", 34, d.w - 50)
     y = d:text(y, sub or stateLine(id), "GameFontHighlightSmall", 34, d.w - 50)
     local party = partyIcons(id)
     if party ~= "" then y = d:text(y, party, "GameFontHighlightSmall", 34, d.w - 50) end
+    -- the whole row opens the quest's page (what to do, what unlocks it)
+    local c = d:card(top + 3, top - y + 3, function() QM:Fire("OPEN", holder or "me", id) end)
+    c.bg:SetVertexColor(1, 1, 1, 0)
+    c.edge:SetVertexColor(0, 0, 0, 0)
     y = y - 5
   end
 
@@ -618,7 +629,7 @@ function D.renderDungeon(d, J, dg)
     for _, id in ipairs(p.inside) do questRow(id) end
   end
   if #p.later > 0 then
-    y = d:section(y, "Not yet", "Higher level, or the start isn't known.")
+    y = d:section(y, "Not yet", "Higher level, not offered to you yet, or the start isn't known.")
     for _, l in ipairs(p.later) do questRow(l.id) end
   end
   if #p.done > 0 then

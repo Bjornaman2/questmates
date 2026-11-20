@@ -260,6 +260,10 @@ local function qt(q) return C.gold .. (q and q.title or "?") .. "|r" end
 local nextStep = QM.nextStep
 
 local function stepSentence(s)
+  if s.kind == "blocked" then
+    return (s.blocked and s.blocked.npc or "The quest giver") .. " doesn't offer " .. C.gold .. (QM.titleOf(s.qid) or "it") .. "|r" ..
+           " to you yet - something earlier is missing"
+  end
   local title = C.gold .. (QM.titleOf(s.qid) or "the first quest") .. "|r"
   local prefix = s.total > 1 and ("Step " .. s.n .. " of " .. s.total .. ": ") or ""
   if s.kind == "finish" then
@@ -284,7 +288,7 @@ end
 -- The button action for the next step: guided trip to its quest giver, or (if it's already in your log)
 -- the game's arrow pointed at that quest. Never a later step.
 local function goTo(s)
-  if not s then return nil end
+  if not s or s.kind == "blocked" then return nil end
   if s.kind == "finish" then return function() QM.trackOwnQuest(s.qid) end end
   if s.giver and s.giver.map and s.giver.x then
     return function() QM.guide(s.giver, { npc = s.giver.npc, title = QM.titleOf(s.qid), qid = s.qid, verb = "Pick up" }) end
@@ -889,7 +893,10 @@ local function renderQuest()
     sub = (s.total > 1) and "The steps are listed below - start with the first one." or stepSentenceCap(s)
     local go = goTo(s)
     local holder = holders[1]
-    if s.total <= 1 and holder and QM.mates[holder].quests[id].share and not s.giver then
+    if s.kind == "blocked" then
+      line = (s.blocked.npc or "The quest giver") .. " doesn't offer " .. (s.qid == id and "this quest" or (QM.titleOf(s.qid) or "the first step")) .. " to you yet."
+      sub = "It needs an earlier quest the quest database doesn't list. What probably unlocks it is below."
+    elseif s.total <= 1 and holder and QM.mates[holder].quests[id].share and not s.giver then
       btn = { "Ask to share", function() QM.askShare(holder, id) end }
     elseif go then
       btn = { s.kind == "finish" and "Show me" or "Take me there", go }
@@ -936,6 +943,42 @@ local function renderQuest()
       y = stepsBlock(d, y, id, mine)
     end
     if not mine and #path == 1 and not QM.askedPath[id] then QM.requestPath(id) end
+  end
+  -- not offered to you yet: what probably unlocks it (friends' answers first), one step at a time
+  local function unlock(s)
+    local O = QM.Offers
+    O.ask(s.qid)
+    local hints = O.hints(s.qid)
+    y = d:section(y, "What probably unlocks it", "Quests " .. (s.blocked.npc or "that quest giver") .. " gives or takes around this level that you haven't done.")
+    if #hints == 0 then
+      y = d:text(y, "None left that you haven't done. Ask your friend what they did right before they got it.", "GameFontHighlightSmall", 12)
+      return
+    end
+    for i, h in ipairs(hints) do
+      if i > 6 then y = d:text(y, C.grey .. "...and " .. (#hints - 6) .. " more|r", "GameFontHighlightSmall", 34); break end
+      local top = y
+      d:icon(i == 1 and "pickup" or "lock", 12, top, 16)
+      local title = QM.titleOf(h.qid) or "?"
+      local who = ""
+      if #h.who > 0 then
+        local names = {}
+        for _, full in ipairs(h.who) do names[#names + 1] = QM.nameText(full) end
+        who = "  " .. table.concat(names, ", ") .. C.green .. " did this - most likely the one|r"
+      end
+      y = d:text(y, (i == 1 and (C.orange .. "Try first: |r") or (C.grey .. i .. ". |r")) .. C.gold .. title .. "|r" .. who, "GameFontHighlightSmall", 34, d.w - 160)
+      local hs = QM.nextStep(h.qid)
+      y = d:text(y, stepSentenceCap(hs), "GameFontHighlightSmall", 34, d.w - 160)
+      if i == 1 then
+        local go = goTo(hs)
+        if go then d:action(hs.kind == "finish" and "Show me" or "Take me there", top - 2, go, 120) end
+      end
+      y = y - 6
+    end
+    y = d:text(y, C.grey .. "When you get the quest after one of these, Questmates remembers it for next time.|r", "GameFontDisableSmall", 12)
+  end
+  if not mine then
+    local s = nextStep(id)
+    if s.kind == "blocked" then unlock(s) end
   end
   if mine then progress(); steps() else steps(); progress() end
   y = d:text(y - 6, C.grey .. "Quest chains are learned as you and your friends play, so they fill in over time.|r", "GameFontDisableSmall", 10)

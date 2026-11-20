@@ -7,7 +7,7 @@
 local ADDON, QM = ...
 _G.Questmates = QM
 
-QM.VERSION = "2.8.0"
+QM.VERSION = "2.9.0"
 QM.PREFIX = "QMATE2"
 local SEP, OSEP = "~", "^"
 local MAXMSG = 250
@@ -878,6 +878,12 @@ local function onMessage(text, sender)
       m.suggested = { id = id, t = GetTime() }
       QM.toast(full, "suggest", q)
     end
+  elseif cmd == "U" then
+    local id = tonumber(f[2])
+    if id then QM:Fire("UNLOCK_ASK", full, id) end
+  elseif cmd == "V" then
+    local id = tonumber(f[3])
+    if f[2] == myFull() and id then QM:Fire("UNLOCK_ANSWER", full, id, f[4]) end
   elseif cmd == "Y" then
     local id = tonumber(f[2])
     if id and f[3] and f[3] ~= "" and K().dq[id] ~= f[3] then K().dq[id] = f[3]; QM:Fire("LEARNED") end
@@ -1070,7 +1076,11 @@ function QM.nextStep(id)
   local path = QM.pathTo(id)
   for n, qid in ipairs(path) do
     local st = QM.stepState(qid)
-    if st == "todo" then return { qid = qid, n = n, total = #path, giver = QM.giverOf(qid), kind = "pickup", path = path } end
+    if st == "todo" then
+      -- the quest giver didn't offer it when you talked to them: something earlier is missing
+      local blocked = QM.Offers and QM.Offers.blocked(qid)
+      return { qid = qid, n = n, total = #path, giver = QM.giverOf(qid), kind = blocked and "blocked" or "pickup", path = path, blocked = blocked }
+    end
     if st == "have" and qid ~= id then return { qid = qid, n = n, total = #path, kind = "finish", path = path } end
   end
   return { qid = id, n = #path, total = #path, giver = QM.giverOf(id), kind = "pickup", path = path }
@@ -1080,6 +1090,7 @@ end
 function QM.doNextStep(id, opts)
   local s = QM.nextStep(id)
   if s.kind == "finish" then QM.trackOwnQuest(s.qid); return s end
+  if s.kind == "blocked" then QM:Fire("OPEN", nil, s.qid); return s end
   if s.giver and s.giver.map and s.giver.x then
     QM.guide(s.giver, { npc = s.giver.npc, title = QM.titleOf(s.qid), qid = s.qid, verb = "Pick up" }, opts)
   else
@@ -1196,6 +1207,7 @@ ev:SetScript("OnEvent", function(_, event, ...)
       local p = (pendingTurnin and pendingTurnin.id == id) and pendingTurnin or here()
       K().turnins[id] = { npc = p.npc, map = p.map, x = p.x, y = p.y, zone = p.zone }
       lastTurnin = { id = id, npc = p.npc, t = GetTime() }
+      QM.lastTurnin = lastTurnin
       pendingTurnin = nil
     end
     scheduleScan()
