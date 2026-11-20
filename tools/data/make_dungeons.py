@@ -160,7 +160,7 @@ for qid in sorted(need):
     py_ = [abs(x) for x in ids(q.get(13))]
     fin = finisher(q)
     lines.append("Q[%d]={%s,%d,%d,%d,%d,%s,%s,%s,%s}" % (
-        qid, L(s(q.get(1))), q.get(5) or 0, q.get(4) or 0, (q.get(6) or 0) & 0xFFFF, q.get(7) or 0,
+        qid, L(s(q.get(1))), q.get(5) or 0, q.get(4) or 0, (q.get(6) or 0), q.get(7) or 0,
         "{" + ",".join(map(str, pa)) + "}" if pa else "nil",
         "{" + ",".join(map(str, py_)) + "}" if py_ else "nil",
         sts, L(fin) if fin else "nil"))

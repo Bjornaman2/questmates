@@ -7,7 +7,7 @@
 local ADDON, QM = ...
 _G.Questmates = QM
 
-QM.VERSION = "2.9.0"
+QM.VERSION = "2.9.1"
 QM.PREFIX = "QMATE2"
 local SEP, OSEP = "~", "^"
 local MAXMSG = 250
@@ -239,13 +239,18 @@ QM.K = K
 local function DQ(id) return QM.DData and QM.DData.Q[id] end
 QM.DQ = DQ
 
-local band = bit and bit.band or function(a, b)
+-- Race masks go past 32 bits (WoW Forever's extra races), which the game's bit.band can't do.
+local function bigBand(a, b)
   local r, p = 0, 1
   while a > 0 and b > 0 do
     if a % 2 == 1 and b % 2 == 1 then r = r + p end
     a, b, p = math.floor(a / 2), math.floor(b / 2), p * 2
   end
   return r
+end
+local band = function(a, b)
+  if bit and bit.band and a < 2147483648 and b < 2147483648 then return bit.band(a, b) end
+  return bigBand(a, b)
 end
 QM.band = band
 

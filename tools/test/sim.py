@@ -288,4 +288,17 @@ print("A learned prev:", A.execute("return tostring(QuestmatesDB.know.prev[94982
 print("path now:", A.execute("local t = {} for _, q in ipairs(Questmates.pathTo(94982)) do t[#t+1] = Questmates.titleOf(q) end return table.concat(t, ' -> ')"))
 errors(A, "A blocked"); errors(B, "B blocked")
 
+section("DIRECT WINDOW SCENARIO")
+Z = client("Zeke", "MAGE")
+clients = {"Zeke": Z}
+Z.execute("MYLEVEL = 45; LOG = {{id=94877, title='Saving Sunnyglade', level=40, share=true, obj={{text='Twilight cultist slain', have=3, need=8}}}}")
+Z.globals().FIRE("PLAYER_ENTERING_WORLD"); tick(1)
+Z.execute("Questmates.Dungeons.setTask(17780)"); tick(1)
+Z.execute("NPC = 'Demar Brant'"); Z.globals().FIRE("QUEST_PROGRESS"); tick(2, 20)
+print("blocked after direct window:", Z.execute("local b = Questmates.Offers.blocked(94982) return b and b.npc or 'no'"))
+Z.execute("Questmates:Fire('OPEN', nil, 94982)"); tick(1)
+txt = Z.execute("return TEXTS(QuestmatesJournal)")
+i = txt.find("What probably unlocks it"); print(txt[i:i+420])
+errors(Z, "Z direct")
+
 print("\nRESULT:", "FAIL " + ", ".join(fails) if fails else "no Lua errors")

@@ -52,7 +52,9 @@ end
 function O.hints(id)
   local list = {}
   for _, qid in ipairs(O.candidates(id)) do
-    if not QM.completedByMe(qid) and not QM.me.quests[qid] then
+    if QM.me.quests[qid] and QM.me.quests[qid].state ~= -1 then
+      list[#list + 1] = { qid = qid, who = {}, inLog = true }
+    elseif not QM.completedByMe(qid) then
       local who = {}
       for _, full in ipairs(QM.mateList()) do
         local m = QM.mates[full]
@@ -62,6 +64,7 @@ function O.hints(id)
     end
   end
   table.sort(list, function(a, b)
+    if (a.inLog == true) ~= (b.inLog == true) then return a.inLog == true end
     if (#a.who > 0) ~= (#b.who > 0) then return #a.who > 0 end
     return (QM.DData.Q[a.qid][2] or 0) > (QM.DData.Q[b.qid][2] or 0)
   end)
@@ -152,10 +155,22 @@ local function npcName()
   return n
 end
 
+-- A quest list seen just now (gossip / greeting): a quest window that follows came from that list.
+local lastList = { npc = nil, t = -999 }
+
 local ev = CreateFrame("Frame")
-for _, e in ipairs({ "GOSSIP_SHOW", "QUEST_GREETING" }) do pcall(ev.RegisterEvent, ev, e) end
+for _, e in ipairs({ "GOSSIP_SHOW", "QUEST_GREETING", "QUEST_PROGRESS", "QUEST_COMPLETE" }) do pcall(ev.RegisterEvent, ev, e) end
 ev:SetScript("OnEvent", function(_, event)
   local offered, ok = {}, false
+  if event == "QUEST_PROGRESS" or event == "QUEST_COMPLETE" then
+    -- the NPC opened an in-progress / turn-in window straight away: they have nothing new for you
+    -- (with anything new to offer, the game shows their quest list first)
+    local npc = npcName()
+    if npc and not (lastList.npc == npc and GetTime() - lastList.t < 60) then
+      C_Timer.After(0, function() pcall(check, npc, {}) end)
+    end
+    return
+  end
   if event == "GOSSIP_SHOW" and C_GossipInfo and C_GossipInfo.GetAvailableQuests then
     local list
     ok, list = pcall(C_GossipInfo.GetAvailableQuests)
@@ -172,6 +187,7 @@ ev:SetScript("OnEvent", function(_, event)
   end
   if ok then
     local npc = npcName()
+    lastList.npc, lastList.t = npc, GetTime()
     C_Timer.After(0, function() pcall(check, npc, offered) end)
   end
 end)

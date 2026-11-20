@@ -965,12 +965,22 @@ local function renderQuest()
         for _, full in ipairs(h.who) do names[#names + 1] = QM.nameText(full) end
         who = "  " .. table.concat(names, ", ") .. C.green .. " did this - most likely the one|r"
       end
-      y = d:text(y, (i == 1 and (C.orange .. "Try first: |r") or (C.grey .. i .. ". |r")) .. C.gold .. title .. "|r" .. who, "GameFontHighlightSmall", 34, d.w - 160)
-      local hs = QM.nextStep(h.qid)
-      y = d:text(y, stepSentenceCap(hs), "GameFontHighlightSmall", 34, d.w - 160)
-      if i == 1 then
-        local go = goTo(hs)
-        if go then d:action(hs.kind == "finish" and "Show me" or "Take me there", top - 2, go, 120) end
+      if h.inLog then
+        local q = QM.me.quests[h.qid]
+        y = d:text(y, (i == 1 and (C.orange .. "Finish first: |r") or (C.grey .. i .. ". |r")) .. C.gold .. title .. "|r" .. C.green .. "  (in your quest log)|r", "GameFontHighlightSmall", 34, d.w - 160)
+        local _, have, need = QM.progress(q)
+        y = d:text(y, (q.state == 1 and (C.green .. "Done - turn it in to " .. ((QM.turninOf(h.qid) or {}).npc or "the quest giver") .. "|r")
+                       or ("From the same quest giver - finish it and turn it in" .. (need > 0 and (C.grey .. " (" .. have .. "/" .. need .. ")|r") or ""))),
+                   "GameFontHighlightSmall", 34, d.w - 160)
+        if i == 1 then d:action("Show me", top - 2, function() QM.trackOwnQuest(h.qid) end, 120) end
+      else
+        y = d:text(y, (i == 1 and (C.orange .. "Try first: |r") or (C.grey .. i .. ". |r")) .. C.gold .. title .. "|r" .. who, "GameFontHighlightSmall", 34, d.w - 160)
+        local hs = QM.nextStep(h.qid)
+        y = d:text(y, stepSentenceCap(hs), "GameFontHighlightSmall", 34, d.w - 160)
+        if i == 1 then
+          local go = goTo(hs)
+          if go then d:action(hs.kind == "finish" and "Show me" or "Take me there", top - 2, go, 120) end
+        end
       end
       y = y - 6
     end
@@ -1049,7 +1059,7 @@ function J.refresh()
   else
     local first = renderMid()
     local valid = J.quest and ((J.sel == "me" and QM.me.quests[J.quest]) or (J.sel ~= "me" and QM.mates[J.sel] and QM.mates[J.sel].quests[J.quest]))
-    if not valid and not J.keepQuest then J.quest = first end
+    if not valid and not J.keepQuest and J.quest ~= J.pinned then J.quest = first end
     J.keepQuest = nil
     setFooter(renderQuest() or {})
   end
@@ -1123,8 +1133,10 @@ QM:On("OPEN", function(full, qid)
     else
       for _, n in ipairs(QM.mateList()) do if QM.mates[n] and QM.mates[n].quests[qid] then J.sel = n break end end
     end
-    J.sel = J.sel or (full and QM.mates[full] and full) or "home"
+    -- nobody has it (a dungeon quest, one that isn't offered yet): show it on your own page
+    J.sel = J.sel or (full and QM.mates[full] and full) or "me"
     J.quest = qid
+    J.pinned = qid
     J.keepQuest = true
   elseif full then
     J.sel, J.quest = full, nil
