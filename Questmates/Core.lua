@@ -7,7 +7,7 @@
 local ADDON, QM = ...
 _G.Questmates = QM
 
-QM.VERSION = "2.10.1"
+QM.VERSION = "2.11.0"
 QM.PREFIX = "QMATE2"
 local SEP, OSEP = "~", "^"
 local MAXMSG = 250
@@ -327,7 +327,9 @@ function QM.turninOf(id)
   local t = K().turnins[id]
   if t then return t end
   local q = DQ(id)
-  return (q and q[9]) and { npc = q[9] } or nil
+  if not (q and q[9]) then return nil end
+  local p = q[10]
+  return { npc = q[9], map = p and p[1], x = p and p[2], y = p and p[3] }
 end
 
 local function questLinePrev(id)
@@ -367,6 +369,8 @@ function QM.pathTo(id)
     local function visit(qid, depth)
       if seen[qid] or depth > 12 then return end
       seen[qid] = true
+      -- a quest you have or have done: everything before it is done too, so don't look further back
+      if qid ~= id and (me.quests[qid] or QM.completedByMe(qid)) then path[#path + 1] = qid; return end
       for _, p in ipairs(QM.prereqs(qid) or {}) do
         if DQ(p) or K().titles[p] then visit(p, depth + 1) end
       end

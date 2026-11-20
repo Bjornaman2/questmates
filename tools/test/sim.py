@@ -342,4 +342,17 @@ Y.execute("NPC = 'Demar Brant'"); Y.globals().FIRE("QUEST_PROGRESS"); tick(1, 10
 print("--- LOG (last 8) ---"); print(Y.execute("local l = QuestmatesDB.debugLog local t = {} for i = math.max(1, #l - 7), #l do t[#t+1] = l[i] end return table.concat(t, string.char(10))"))
 errors(Y, "Y game knows")
 
+section("PLAN PAGE")
+P = client("Pia", "MAGE")
+clients = {"Pia": P}
+P.execute("MYLEVEL = 40; LOG = {{id=94886, title='The Western Front', level=44, share=true, obj={{text='Twilight Lieutenant slain', have=0, need=1}}}, {id=94907, title='A Small Favor', level=44, share=true, obj={{text='Ore', have=1, need=5}}}}")
+P.execute("POS = {0.66, 0.80}; C_Map.GetBestMapForUnit = function() return 2548 end")
+P.globals().FIRE("PLAYER_ENTERING_WORLD"); tick(1)
+P.execute("Questmates.Dungeons.setTask(17780)"); tick(1)
+P.execute("NPC = 'Demar Brant'"); P.globals().FIRE("QUEST_PROGRESS"); tick(2, 20)
+P.execute("Questmates:Fire('OPEN_DUNGEON', 17780)"); tick(1)
+txt = P.execute("return TEXTS(QuestmatesJournal)")
+i = txt.find("Krol'dok Stronghold\nLevel"); print(txt[i:i+1500])
+errors(P, "P plan")
+
 print("\nRESULT:", "FAIL " + ", ".join(fails) if fails else "no Lua errors")

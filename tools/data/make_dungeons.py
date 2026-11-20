@@ -86,11 +86,12 @@ def starter(q):
     return None
 
 def finisher(q):
+    """(name, (uiMapID, x, y) or None) of the NPC you turn the quest in to"""
     for nid in ids(triple(q.get(3))[0]):
         n = N.get(nid)
         if n:
-            return s(n.get(1))
-    return None
+            return s(n.get(1)), place_of_spawns(n.get(7))
+    return None, None
 
 for qid, q in Q.items():
     z = q.get(17)
@@ -137,7 +138,8 @@ lines = [
     "-- Questmates / QuestData.lua",
     "-- GENERATED from QuestieDB (Forever flavor, GPL-3.0, https://github.com/Questie/QuestieDB) by make_dungeons.py.",
     "-- Every WoW Forever quest: quest giver (position in WoW Forever's own map frame), prerequisites, and the dungeons.",
-    "-- Q[id] = { name, level, minLevel, raceMask, classMask, preAll, preAny, starter, finisherName }",
+    "-- Q[id] = { name, level, minLevel, raceMask, classMask, preAll, preAny, starter, finisherName, finisherPlace }",
+    "-- finisherPlace = { uiMapID, x, y } of the NPC you turn the quest in to",
     "-- starter = { kind ('npc'|'obj'|'item'), name, uiMapID, x, y, friendlyTo ('A'|'H'|'AH'|'') }",
     "local _, QM = ...",
     "QM.DData = {}",
@@ -158,12 +160,13 @@ for qid in sorted(need):
         sts = "nil"
     pa = [abs(x) for x in ids(q.get(12))]
     py_ = [abs(x) for x in ids(q.get(13))]
-    fin = finisher(q)
-    lines.append("Q[%d]={%s,%d,%d,%d,%d,%s,%s,%s,%s}" % (
+    fin, fpl = finisher(q)
+    lines.append("Q[%d]={%s,%d,%d,%d,%d,%s,%s,%s,%s,%s}" % (
         qid, L(s(q.get(1))), q.get(5) or 0, q.get(4) or 0, (q.get(6) or 0), q.get(7) or 0,
         "{" + ",".join(map(str, pa)) + "}" if pa else "nil",
         "{" + ",".join(map(str, py_)) + "}" if py_ else "nil",
-        sts, L(fin) if fin else "nil"))
+        sts, L(fin) if fin else "nil",
+        "{%d,%s,%s}" % fpl if fpl else "nil"))
 
 dl = []
 for area, dg in dungeons.items():
