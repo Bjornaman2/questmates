@@ -1,0 +1,10 @@
+﻿# BigWigs packager: builds the addon zip from the Questmates folder.
+package-as: Questmates
+move-folders:
+  Questmates/Questmates: Questmates
+ignore:
+  - tools
+  - dist
+  - README.md
+  - .github
+  - .gitignore
