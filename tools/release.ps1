@@ -44,3 +44,7 @@ git push -q origin HEAD --tags
 $relNotes = $(if ($Notes) { $Notes } else { "Questmates $ver" }) + "`n`nNew players: download **Install Questmates.bat** below and double-click it - it installs Questmates and keeps it up to date automatically."
 gh release create "v$ver" $zip $bat --title "Questmates $ver" --notes $relNotes
 Write-Host "released v$ver"
+
+# CurseForge (skipped until the project ID and the owner's CURSEFORGE_TOKEN are set up)
+try { & (Join-Path $PSScriptRoot 'curseforge-upload.ps1') -Notes $Notes }
+catch { Write-Host ('CurseForge upload failed: ' + $_.Exception.Message) -ForegroundColor Yellow }
