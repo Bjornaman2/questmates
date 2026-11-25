@@ -7,7 +7,7 @@
 local ADDON, QM = ...
 _G.Questmates = QM
 
-QM.VERSION = "2.11.1"
+QM.VERSION = "2.11.2"
 QM.PREFIX = "QMATE2"
 local SEP, OSEP = "~", "^"
 local MAXMSG = 250
@@ -521,6 +521,10 @@ local function pump()
   local ch = groupChannel()
   if not ch then wipe(queue); wipe(queueKeys); return end
   local ok, res = pcall(C_ChatInfo.SendAddonMessage, QM.PREFIX, item.msg, ch)
+  QM.sentCount = (QM.sentCount or 0) + 1
+  if not ok or (res ~= 0 and res ~= true and res ~= nil) or QM.sentCount <= 5 then
+    QM.dbg("send #%d to %s: %s -> %s %s", QM.sentCount, ch, item.msg:sub(1, 20), tostring(ok), tostring(res))
+  end
   if ok and THROTTLED[res] then
     pumping = true
     C_Timer.After(1.0, pump)
@@ -772,6 +776,9 @@ local function onRoster()
     end
   end
   QM.roster = new
+  local keys = {}
+  for k in pairs(new) do keys[#keys + 1] = k end
+  QM.dbg("party: %s (me: %s)", (#keys > 0) and table.concat(keys, ", ") or "none", myFull())
   if joined then
     send("H")
     fullSync()
@@ -826,6 +833,9 @@ end
 
 local function onMessage(text, sender)
   if isSecret(text) or isSecret(sender) or not sender then return end
+  QM.recvCount = QM.recvCount or {}
+  QM.recvCount[sender] = (QM.recvCount[sender] or 0) + 1
+  if QM.recvCount[sender] <= 3 then QM.dbg("received from %s: %s", sender, text:sub(1, 20)) end
   local full = sender:find("-", 1, true) and sender or (sender .. "-" .. QM.realmName())
   if QM.isMe(full) then return end
   -- file it under the party member it belongs to, even if their realm is written differently
@@ -1208,7 +1218,10 @@ ev:SetScript("OnEvent", function(_, event, ...)
       C_Timer.After(6, function() QM.toast("me", "updated", { title = "Version " .. QM.VERSION }, nil, { from = from }) end)
     end
     DB.lastVersion = QM.VERSION
-    if C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix then pcall(C_ChatInfo.RegisterAddonMessagePrefix, QM.PREFIX) end
+    if C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix then
+      local okp, resp = pcall(C_ChatInfo.RegisterAddonMessagePrefix, QM.PREFIX)
+      QM.dbg("prefix %s registered: %s %s", QM.PREFIX, tostring(okp), tostring(resp))
+    end
     C_Timer.NewTicker(20, function() updateFocus(); sendPOI() end)
     QM:Fire("INIT")
 
