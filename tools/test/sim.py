@@ -8,6 +8,7 @@ FILES = [l.strip() for l in open(os.path.join(ADDON, "Questmates.toc"), encoding
 mock = open(os.path.join(HERE, "mock.lua"), encoding="utf-8-sig").read()
 ATLAS = os.environ.get("ATLAS", "0") == "1"
 fails = []
+SENDER_SEP = os.environ.get("SENDER_SEP", "-")
 
 def client(name, cls):
     L = lua51.LuaRuntime(unpack_returned_tuples=True)
@@ -38,7 +39,7 @@ def deliver():
             for other, L2 in clients.items():
                 if other == name: continue
                 for p, m in msgs:
-                    L2.globals().FIRE("CHAT_MSG_ADDON", p, m, "PARTY", name + "-Doomhowl")
+                    L2.globals().FIRE("CHAT_MSG_ADDON", p, m, "PARTY", name + SENDER_SEP + "Doomhowl")
             moved = True
 
 def tick(sec=1.0, steps=10):

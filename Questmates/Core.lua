@@ -7,7 +7,7 @@
 local ADDON, QM = ...
 _G.Questmates = QM
 
-QM.VERSION = "2.12.0"
+QM.VERSION = "2.12.1"
 QM.PREFIX = "QMATE2"
 local SEP, OSEP = "~", "^"
 local MAXMSG = 250
@@ -104,10 +104,12 @@ end
 QM.myFull = myFull
 
 -- Same character? Names must match; a missing realm on either side matches any realm.
+-- "Name-Realm", or "Name Realm" (how WoW Forever writes the sender of addon messages), or just "Name".
 local function splitFull(full)
-  local n, r = tostring(full or ""):match("^([^%-]+)%-?(.*)$")
-  return n, r or ""
+  local n, r = tostring(full or ""):match("^([^%-%s]+)[%-%s]?(.*)$")
+  return n, ((r or ""):gsub("[%s%-]", ""))
 end
+QM.splitFull = splitFull
 function QM.sameChar(a, b)
   if not a or not b then return false end
   local an, ar = splitFull(a)
@@ -522,7 +524,7 @@ local function pump()
   if not ch then wipe(queue); wipe(queueKeys); return end
   local ok, res = pcall(C_ChatInfo.SendAddonMessage, QM.PREFIX, item.msg, ch)
   QM.sentCount = (QM.sentCount or 0) + 1
-  if not ok or (res ~= 0 and res ~= true and res ~= nil) or QM.sentCount <= 5 then
+  if not ok or (res ~= 0 and res ~= true and res ~= nil and not THROTTLED[res]) or QM.sentCount <= 5 then
     QM.dbg("send #%d to %s: %s -> %s %s", QM.sentCount, ch, item.msg:sub(1, 20), tostring(ok), tostring(res))
   end
   if ok and THROTTLED[res] then
@@ -836,7 +838,8 @@ local function onMessage(text, sender)
   QM.recvCount = QM.recvCount or {}
   QM.recvCount[sender] = (QM.recvCount[sender] or 0) + 1
   if QM.recvCount[sender] <= 3 then QM.dbg("received from %s: %s", sender, text:sub(1, 20)) end
-  local full = sender:find("-", 1, true) and sender or (sender .. "-" .. QM.realmName())
+  local sname, srealm = splitFull(sender)
+  local full = (sname or sender) .. "-" .. ((srealm ~= "") and srealm or QM.realmName())
   if QM.isMe(full) then return end
   -- file it under the party member it belongs to, even if their realm is written differently
   for rf in pairs(QM.roster) do if QM.sameChar(rf, full) then full = rf break end end
