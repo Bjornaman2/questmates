@@ -7,7 +7,7 @@
 local ADDON, QM = ...
 _G.Questmates = QM
 
-QM.VERSION = "2.11.0"
+QM.VERSION = "2.11.1"
 QM.PREFIX = "QMATE2"
 local SEP, OSEP = "~", "^"
 local MAXMSG = 250
@@ -88,13 +88,33 @@ local function split(s, sep)
   end
 end
 
+-- Your realm. WoW Forever often gives addons no realm name, so everything below also works without one.
+function QM.realmName()
+  local r = GetNormalizedRealmName and safe(GetNormalizedRealmName())
+  if (not r or r == "") and GetRealmName then
+    r = safe(GetRealmName())
+    if r then r = r:gsub("[%s%-]", "") end
+  end
+  return r or ""
+end
+
 local function myFull()
-  local name = UnitName("player")
-  local realm = (GetNormalizedRealmName and GetNormalizedRealmName()) or ""
-  if realm == "" and GetRealmName then realm = (GetRealmName() or ""):gsub("[%s%-]", "") end
-  return (name or "?") .. "-" .. (realm or "")
+  return (UnitName("player") or "?") .. "-" .. QM.realmName()
 end
 QM.myFull = myFull
+
+-- Same character? Names must match; a missing realm on either side matches any realm.
+local function splitFull(full)
+  local n, r = tostring(full or ""):match("^([^%-]+)%-?(.*)$")
+  return n, r or ""
+end
+function QM.sameChar(a, b)
+  if not a or not b then return false end
+  local an, ar = splitFull(a)
+  local bn, br = splitFull(b)
+  return an ~= nil and an == bn and (ar == "" or br == "" or ar == br)
+end
+function QM.isMe(full) return QM.sameChar(full, myFull()) end
 
 function QM.short(full) return (full and full:match("^[^-]+")) or full or "?" end
 
@@ -717,7 +737,7 @@ local function readRoster()
   local new = {}
   local raid = IsInRaid()
   local n = raid and GetNumGroupMembers() or GetNumSubgroupMembers()
-  local myRealm = GetNormalizedRealmName and GetNormalizedRealmName() or ""
+  local myRealm = QM.realmName()
   for i = 1, n do
     local unit = raid and ("raid" .. i) or ("party" .. i)
     if UnitExists(unit) and not UnitIsUnit(unit, "player") then
@@ -742,7 +762,15 @@ local function onRoster()
   local new = readRoster()
   local joined = false
   for full in pairs(new) do if not QM.roster[full] then joined = true end end
-  for full, m in pairs(mates) do if not new[full] and not m.demo then mates[full] = nil end end
+  for full, m in pairs(mates) do
+    if not new[full] and not m.demo then
+      -- the same person under a slightly different name (realm missing on one side): keep their data
+      local key
+      for nf in pairs(new) do if QM.sameChar(nf, full) then key = nf break end end
+      mates[full] = nil
+      if key and not mates[key] then m.full = key; mates[key] = m end
+    end
+  end
   QM.roster = new
   if joined then
     send("H")
@@ -798,8 +826,10 @@ end
 
 local function onMessage(text, sender)
   if isSecret(text) or isSecret(sender) or not sender then return end
-  local full = sender:find("-", 1, true) and sender or (sender .. "-" .. (GetNormalizedRealmName() or ""))
-  if full == myFull() then return end
+  local full = sender:find("-", 1, true) and sender or (sender .. "-" .. QM.realmName())
+  if QM.isMe(full) then return end
+  -- file it under the party member it belongs to, even if their realm is written differently
+  for rf in pairs(QM.roster) do if QM.sameChar(rf, full) then full = rf break end end
   local f = split(text, SEP)
   local cmd = f[1]
   local m = QM.getMate(full)
@@ -873,9 +903,9 @@ local function onMessage(text, sender)
     end
   elseif cmd == "W" then
     local id = tonumber(f[3])
-    if f[2] == myFull() and id then answerPath(full, id) end
+    if QM.isMe(f[2]) and id then answerPath(full, id) end
   elseif cmd == "C" then
-    if f[2] == myFull() or f[2] == "*" then
+    if QM.isMe(f[2]) or f[2] == "*" then
       local root, i, n, qid = tonumber(f[3]), tonumber(f[4]), tonumber(f[5]), tonumber(f[6])
       if root and qid then
         if f[8] and f[8] ~= "" and not K().titles[qid] then K().titles[qid] = { f[8], tonumber(f[7]) or 0 } end
@@ -893,7 +923,7 @@ local function onMessage(text, sender)
     end
   elseif cmd == "S" then
     local id = tonumber(f[3])
-    if f[2] == myFull() and id and me.quests[id] then
+    if QM.isMe(f[2]) and id and me.quests[id] then
       local title = (QM.C.gold .. me.quests[id].title .. "|r"):gsub("%%", "%%%%")
       QM.playSound("IG_PLAYER_INVITE")
       StaticPopup_Show("QUESTMATES_SHARE", QM.nameText(full), title, id)
@@ -911,7 +941,7 @@ local function onMessage(text, sender)
     if id then QM:Fire("UNLOCK_ASK", full, id) end
   elseif cmd == "V" then
     local id = tonumber(f[3])
-    if f[2] == myFull() and id then QM:Fire("UNLOCK_ANSWER", full, id, f[4]) end
+    if QM.isMe(f[2]) and id then QM:Fire("UNLOCK_ANSWER", full, id, f[4]) end
   elseif cmd == "Y" then
     local id = tonumber(f[2])
     if id and f[3] and f[3] ~= "" and K().dq[id] ~= f[3] then K().dq[id] = f[3]; QM:Fire("LEARNED") end

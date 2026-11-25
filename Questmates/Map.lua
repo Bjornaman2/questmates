@@ -701,7 +701,7 @@ local function fullOfUnit(unit)
   local name, realm = UnitFullName(unit)
   name, realm = QM.safe(name), QM.safe(realm)
   if not name then return nil end
-  if not realm or realm == "" then realm = GetNormalizedRealmName() or "" end
+  if not realm or realm == "" then realm = QM.realmName() end
   return name .. "-" .. realm
 end
 

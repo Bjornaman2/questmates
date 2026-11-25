@@ -140,7 +140,7 @@ C_Texture = { GetAtlasInfo = function(n) if ATLAS_OK then return { width = 16 } 
 Settings = { RegisterCanvasLayoutCategory = function(p, n) return { GetID = function() return 1 end } end, RegisterAddOnCategory = function() end, OpenToCategory = function() OPENED_SETTINGS = true end }
 
 function UnitName(u) if u == "player" then return PLAYER end if u == "npc" or u == "questnpc" then return NPC end end
-function GetNormalizedRealmName() return REALM end
+function GetNormalizedRealmName() if REALM_HIDDEN then return nil end return REALM end
 function UnitRace() return "Human", "Human", 1 end
 function UnitFactionGroup() return "Alliance" end
 function IsInInstance() if INSTANCE then return true, INSTANCE.kind end return false, "none" end
@@ -149,7 +149,7 @@ ACCEPTED_Q = {}
 function AcceptQuest() ACCEPTED_Q[#ACCEPTED_Q + 1] = DETAIL_ID end
 time = os.time
 date = os.date
-function GetRealmName() return REALM end
+function GetRealmName() if REALM_HIDDEN then return nil end return REALM end
 function UnitLevel() return MYLEVEL or 12 end
 GROUP = {}
 function IsInGroup() return #GROUP > 0 end
@@ -159,7 +159,7 @@ function GetNumGroupMembers() return #GROUP + 1 end
 function UnitExists(u) if u == "player" then return true end local i = tonumber(u:match("%d+")) return i and GROUP[i] ~= nil end
 function UnitIsUnit(a, b) return a == b end
 function UnitIsPlayer(u) return u == "player" or u:find("party") ~= nil end
-function UnitFullName(u) if u == "player" then return PLAYER, REALM end local g = GROUP[tonumber(u:match("%d+"))] return g.name, g.realm end
+function UnitFullName(u) if u == "player" then return PLAYER, (not REALM_HIDDEN) and REALM or nil end local g = GROUP[tonumber(u:match("%d+"))] return g.name, g.realm end
 function UnitClass(u) if u == "player" then return MYCLASS, MYCLASS end local g = GROUP[tonumber(u:match("%d+"))] return g.class, g.class end
 ZONE, SUBZONE = "Elwynn Forest", "Goldshire"
 function GetRealZoneText() return ZONE end
