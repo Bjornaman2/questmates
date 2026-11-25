@@ -1,7 +1,7 @@
 ## Interface: 16001
 ## Title: Questmates
 ## Notes: Party questing made easy: see what everyone is on, how to catch up to their quests, get ready for dungeons together, and share map pins. /qm
-## Version: 2.11.2
+## Version: 2.12.0
 ## Author: Questmates
 ## X-Credits: Quest data from QuestieDB (https://github.com/Questie/QuestieDB), GPL-3.0
 ## SavedVariables: QuestmatesDB

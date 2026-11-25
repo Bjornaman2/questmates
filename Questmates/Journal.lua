@@ -362,6 +362,8 @@ local function card(i)
   c:SetScript("OnClick", function(self)
     QM.playSound("IG_MAINMENU_OPTION_CHECKBOX_ON")
     J.sel, J.quest = self.full, nil
+    local m = QM.mates[self.full]
+    if m and m.focus and m.quests[m.focus] then J.quest = m.focus; J.keepQuest = true end
     J.refresh()
   end)
   cards[i] = c
@@ -403,7 +405,7 @@ local function renderLeft(suggestCount)
       c.name:SetText(C.gold .. "You|r")
       c.info:SetText("Level " .. (UnitLevel("player") or "?") .. " - " .. (QM.me.zone or ""))
       local q = QM.me.quests[QM.me.focus]
-      c.now:SetText(q and (C.soft .. "Doing: |r" .. q.title) or (C.grey .. "Not on a quest right now|r"))
+      c.now:SetText(q and (C.soft .. "Doing: |r" .. q.title .. C.grey .. "  " .. (q.state == 1 and "ready" or (math.floor(QM.progress(q) * 100 + 0.5) .. "%")) .. "|r") or (C.grey .. "Not on a quest right now|r"))
       c.badge:SetText("")
     else
       c.name:SetText(QM.nameText(full))
@@ -414,7 +416,7 @@ local function renderLeft(suggestCount)
         c.badge:SetText("")
       else
         local q = m.quests[m.focus]
-        c.now:SetText(q and (C.soft .. "Doing: |r" .. q.title) or (C.grey .. "Exploring|r"))
+        c.now:SetText(q and (C.soft .. "Doing: |r" .. q.title .. C.grey .. "  " .. (q.state == 1 and "ready" or (math.floor(QM.progress(q) * 100 + 0.5) .. "%")) .. "|r") or (C.grey .. "Exploring|r"))
         local need = 0
         for id in pairs(m.quests) do if QM.relation(id) == "theirs" then need = need + 1 end end
         c.badge:SetText(need > 0 and (C.orange .. need .. " new|r") or "")
@@ -543,7 +545,7 @@ local function renderHome(S)
     local top = y - 2
     local q = e.q
     local rel = q and QM.relation(q.id)
-    d:card(top, 46, function() QM:Fire("OPEN", e.full, q and q.id) end, q and QM.REL[rel == "both" and "both" or rel] or nil)
+    local card = d:card(top, 46, function() QM:Fire("OPEN", e.full, q and q.id) end, q and QM.REL[rel == "both" and "both" or rel] or nil)
     d:portrait(e.full, 16, top - 7, 30)
     local line, sub, btn
     if not q then
@@ -571,10 +573,25 @@ local function renderHome(S)
       elseif q.share then btn = { "Ask to share", function() QM.askShare(e.full, q.id) end, "Asks " .. QM.short(e.full) .. " to share it with you." }
       else btn = { "How to get it", function() QM:Fire("OPEN", e.full, q.id) end } end
     end
-    d:text(top - 6, line, "GameFontHighlight", 56, d.w - 56 - (btn and 140 or 16))
-    d:text(top - 24, sub, "GameFontHighlightSmall", 56, d.w - 56 - (btn and 140 or 16))
+    local tw = d.w - 56 - (btn and 140 or 16)
+    local yy = d:text(top - 6, line, "GameFontHighlight", 56, tw)
+    -- their progress, exactly: every objective with its count, and a bar
+    if q then
+      local pct = QM.progress(q)
+      d:bar(56, yy - 3, math.min(tw, 220), pct, q.state == 1 and { 1, 0.82, 0 } or { 0.26, 0.62, 1 })
+      d:text(yy, (q.state == 1 and (C.gold .. "Ready to turn in|r") or (C.white .. math.floor(pct * 100 + 0.5) .. "%|r")),
+             "GameFontHighlightSmall", 56 + math.min(tw, 220) + 8, 80)
+      yy = yy - 14
+      for _, o in ipairs(q.obj) do
+        local count = (o.need and o.need > 0) and (o.have .. "/" .. o.need .. " ") or ""
+        yy = d:text(yy, (o.fin and C.grey or C.white) .. "- " .. count .. (o.t ~= "" and o.t or "Objective") .. "|r", "GameFontHighlightSmall", 56, tw)
+      end
+    end
+    yy = d:text(yy - 2, sub, "GameFontHighlightSmall", 56, tw)
     if btn then d:action(btn[1], top - 12, btn[2], 120, btn[3]) end
-    y = top - 50
+    local h = math.max(top - yy + 6, 46)
+    card:SetHeight(h)
+    y = top - h - 4
   end
 
   local function more(list, label)

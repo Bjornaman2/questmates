@@ -372,6 +372,10 @@ print("Rowan sees:", R1.execute("local t = {} for _, f in ipairs(Questmates.mate
 print("Rowan tracker:", R1.execute("return TEXTS(QuestmatesTracker)").replace(chr(10), " / ")[:200])
 R1.execute("Questmates.askShare(Questmates.mateList()[1], 783)"); tick(1, 10)
 print("Tilda got share request:", R2.execute("local p = POPUPS[#POPUPS] return p and (STRIP(p.a) .. ' / ' .. tostring(p.data)) or 'none'"))
+R2.execute("LOG[1].obj[1].have = 8"); R2.globals().FIRE("QUEST_LOG_UPDATE"); tick(3, 30)
+R1.execute("Questmates:Fire('OPEN')"); tick(1)
+txt = R1.execute("return TEXTS(QuestmatesJournal)"); i = txt.find("Right now")
+print("--- RIGHT NOW PROGRESS ---"); print(txt[i:i+300])
 errors(R1, "R1 no realm"); errors(R2, "R2 no realm")
 
 print("\nRESULT:", "FAIL " + ", ".join(fails) if fails else "no Lua errors")
