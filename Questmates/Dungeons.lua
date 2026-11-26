@@ -30,7 +30,7 @@ local function build()
   for _, r in ipairs((QM.DData and QM.DData.D) or {}) do
     local qs = {}
     for i, q in ipairs(r[7]) do qs[i] = q end
-    local dg = { area = r[1], name = r[2], raid = r[3], lo = r[4], hi = r[5], entrances = r[6], quests = qs }
+    local dg = { area = r[1], name = r[2], raid = r[3], lo = r[4], hi = r[5], entrances = r[6], quests = qs, zone = r[8] }
     list[#list + 1] = dg
     byArea[dg.area] = dg
     byName[norm(dg.name)] = dg
@@ -261,10 +261,70 @@ function D.fits(dg)
   return dg.hi >= L - 2 and dg.lo <= L + 3
 end
 
+-- The game's own dungeon-entrance markers (the swirl icons on the world map), by name. Built once, when first
+-- needed, by asking every zone map for its entrances.
+local gameEntrances
+local function findGameEntrance(name)
+  if not (C_EncounterJournal and C_EncounterJournal.GetDungeonEntrancesForMap and C_Map.GetMapInfo) then return nil end
+  if not gameEntrances then
+    gameEntrances = {}
+    local zone = (Enum and Enum.UIMapType and Enum.UIMapType.Zone) or 3
+    for id = 1, 3500 do
+      local ok, info = pcall(C_Map.GetMapInfo, id)
+      if ok and info and info.mapType == zone then
+        local ok2, ents = pcall(C_EncounterJournal.GetDungeonEntrancesForMap, id)
+        if ok2 and type(ents) == "table" then
+          for _, e in ipairs(ents) do
+            local n = QM.safe(e.name)
+            local pos = e.position
+            if n and pos and pos.GetXY then
+              local x, y = pos:GetXY()
+              local k = norm(n)
+              if x and y and x > 0 and not gameEntrances[k] then gameEntrances[k] = { map = id, x = x, y = y } end
+            end
+          end
+        end
+      end
+    end
+  end
+  return gameEntrances[norm(name)]
+end
+
+-- Where the dungeon's door is: a known position (quest data, or learned when someone walked in), else the
+-- game's own entrance marker. When neither is known, the zone it is in (zoneOnly = true, no exact spot).
 function D.entrance(dg)
   local e = dg.entrances[1]
-  if not e then return nil end
-  return { map = e[1], x = e[2], y = e[3], npc = dg.name .. " entrance" }
+  if e then return { map = e[1], x = e[2], y = e[3], npc = dg.name .. " entrance" } end
+  local g = findGameEntrance(dg.name)
+  if g then return { map = g.map, x = g.x, y = g.y, npc = dg.name .. " entrance" } end
+  if dg.zone then return { map = dg.zone, zoneOnly = true, npc = dg.name } end
+  return nil
+end
+
+-- "Riverglades (45, 62) - 320 yd", "somewhere in Riverglades", or nil when nothing is known.
+function D.whereText(dg)
+  local p = D.entrance(dg)
+  if not p then return nil end
+  local zone = QM.mapName(p.map) or "?"
+  if p.zoneOnly then return "somewhere in " .. zone end
+  local s = string.format("%s (%.0f, %.0f)", zone, p.x * 100, p.y * 100)
+  local d = QM.distanceTo(p.map, p.x, p.y)
+  if d then s = s .. string.format(" - %d yd", math.floor(d / 10 + 0.5) * 10) end
+  return s
+end
+
+-- Take me to the dungeon: the arrow to the door, or (door unknown) the map opened on its zone.
+function D.goEntrance(dg, opts)
+  local p = D.entrance(dg)
+  if p and not p.zoneOnly then
+    QM.guide(p, { npc = dg.name, title = "the dungeon entrance", verb = "Go to" }, opts)
+  elseif p then
+    if OpenWorldMap then pcall(OpenWorldMap, p.map) end
+    QM.print("%s is somewhere in %s. Its exact entrance isn't known yet - once anyone in your party walks in, Questmates remembers it for everyone.",
+      C.gold .. dg.name .. "|r", C.gold .. (QM.mapName(p.map) or "?") .. "|r")
+  else
+    QM.print("the entrance of %s isn't known yet - once anyone in your party walks in, Questmates remembers it for everyone.", C.gold .. dg.name .. "|r")
+  end
 end
 
 ---------------------------------------------------------------------------------------------------
@@ -384,8 +444,8 @@ function D.go(dg, opts)
   elseif a.kind == "stop" then
     local npc, names, n = D.stopText(a.stop)
     QM.guide(a.stop.giver, { npc = npc, title = n > 1 and (n .. " quests: " .. names) or names, verb = "Pick up" }, opts)
-  elseif a.place then
-    QM.guide(a.place, { npc = dg.name, title = "the dungeon entrance", verb = "Go to" }, opts)
+  else
+    D.goEntrance(dg, opts)
   end
 end
 
@@ -606,11 +666,12 @@ local function describe(dg, step)
     local parts = {}
     if #step.have > 0 then parts[#parts + 1] = "you have " .. names(step.have, 3) end
     if #step.inside > 0 then parts[#parts + 1] = "get " .. names(step.inside, 3) .. " inside" end
+    local where = D.whereText(dg)
+    local what = #parts > 0 and (parts[1]:gsub("^%l", string.upper) .. (parts[2] and ("; " .. parts[2]) or "")) or ""
     return "Go into " .. C.gold .. dg.name .. "|r",
-           (#parts > 0 and (parts[1]:gsub("^%l", string.upper) .. (parts[2] and ("; " .. parts[2]) or "")) or "") ..
-             (step.place and "" or C.grey .. "  (entrance not known yet)|r"),
-           step.place and "Take me there" or nil,
-           step.place and function() QM.guide(step.place, { npc = dg.name, title = "the dungeon entrance", verb = "Go to" }) end or nil,
+           (where and ("Entrance: " .. where) or "Entrance not known yet") .. (what ~= "" and ("\n" .. what) or ""),
+           step.place and (step.place.zoneOnly and "Show the zone" or "Take me there") or nil,
+           step.place and function() D.goEntrance(dg) end or nil,
            "map"
   end
 end
@@ -650,10 +711,7 @@ function D.renderDungeon(d, J, dg)
   y = d:text(y, dg.name, "QuestTitleFont", 10, d.w - 140, 1, 0.82, 0)
   local e = D.entrance(dg)
   local info = (dg.lo > 0) and ("Level " .. dg.lo .. (dg.hi ~= dg.lo and ("-" .. dg.hi) or "")) or ""
-  if e then
-    local dist = QM.distanceTo(e.map, e.x, e.y)
-    info = info .. "   Entrance: " .. (QM.mapName(e.map) or "?") .. (dist and string.format(", %d yd", math.floor(dist / 10 + 0.5) * 10) or "")
-  end
+  if e then info = info .. "   Entrance: " .. D.whereText(dg) end
   y = d:text(y, C.grey .. info .. "|r", "GameFontHighlightSmall", 10, d.w - 150)
   y = y - 6
 

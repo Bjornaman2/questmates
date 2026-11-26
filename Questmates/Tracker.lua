@@ -412,7 +412,10 @@ local function renderTask(y)
   elseif a.kind == "finish" then
     txt = C.orange .. "Next: |r" .. "finish " .. (QM.titleOf(a.qid) or "a quest") .. " first"
   else
-    txt = C.green .. "All picked up - head to the dungeon|r"
+    local where = QM.Dungeons.whereText(dg)
+    txt = C.green .. "All picked up!|r " .. C.orange .. "Next: |r" .. "go to the entrance" ..
+          (where and (C.grey .. " - " .. where .. "|r") or (C.grey .. " - not known yet|r")) ..
+          ((a.place and not a.place.zoneOnly) and (C.gold .. "\nClick for the arrow|r") or "")
   end
   b.next:SetText(txt)
   b:SetHeight(36 + b.next:GetStringHeight() + 4)

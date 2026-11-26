@@ -232,7 +232,9 @@ local function show(d)
       line3 = C.soft .. "It unlocks a quest for " .. (dg and dg.name or "the dungeon") .. "|r"
     else
       title = "All quests picked up!"
-      line3 = C.green .. "Head to " .. (dg and dg.name or "the dungeon") .. "|r" .. C.grey .. "  -  click for the way|r"
+      local where = dg and QM.Dungeons.whereText(dg)
+      line3 = C.green .. "Head to the entrance|r" .. (where and (C.grey .. " - " .. where .. "|r") or "") ..
+              C.grey .. "  -  click for the way|r"
     end
     d.click = function() if dg then QM.Dungeons.go(dg) end end
   elseif d.kind == "notoffered" and d.extra then

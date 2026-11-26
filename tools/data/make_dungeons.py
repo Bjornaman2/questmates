@@ -176,12 +176,13 @@ for area, dg in dungeons.items():
     lo, hi = (levels[0], levels[-1]) if levels else (0, 0)
     dl.append((levels[len(levels) // 2] if levels else 99, area, dg, lo, hi))
 dl.sort()
-lines.append("-- dungeons, easiest first: { area, name, isRaid, minQuestLevel, maxQuestLevel, entrances {{uiMapID,x,y}}, quests }")
+lines.append("-- dungeons, easiest first: { area, name, isRaid, minQuestLevel, maxQuestLevel, entrances {{uiMapID,x,y}}, quests, zoneUiMapID }")
 lines.append("QM.DData.D = {")
 for _, area, dg, lo, hi in dl:
     ents = ",".join("{%d,%s,%s}" % (u, round(x, 4), round(y, 4)) for u, x, y in dg["entrances"])
-    lines.append("  {%d,%s,%s,%d,%d,{%s},{%s}}," % (area, L(dg["name"]), "true" if dg["raid"] else "false", lo, hi, ents,
-                                                 ",".join(map(str, sorted(dg["quests"])))))
+    zone = a2u.get(area) or "nil"   # the zone the dungeon sits in (its door when the exact spot isn't known)
+    lines.append("  {%d,%s,%s,%d,%d,{%s},{%s},%s}," % (area, L(dg["name"]), "true" if dg["raid"] else "false", lo, hi, ents,
+                                                    ",".join(map(str, sorted(dg["quests"]))), zone))
 lines.append("}")
 open(OUT, "w", encoding="utf-8", newline="\n").write("\n".join(lines) + "\n")
 print("dungeons:", len(dl), " quests described:", len(need), " starters without position:", missing_place, " bytes:", os.path.getsize(OUT))
